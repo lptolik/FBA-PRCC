@@ -1,0 +1,1808 @@
+---
+title: "FBA Sensitivity Analysis prototrophic and auxotrophic strains of E. coli"
+author: "A. Sorokin"
+date:  '`r format(Sys.time(), "%d.%m.%Y")`'
+output:
+  pdf_document:
+    keep_tex: yes
+    number_sections: yes
+    toc: yes
+    extra_dependencies: ["flafter"]
+  word_document: default
+  html_document: default
+header-includes:
+- \usepackage[utf8]{inputenc}
+- \usepackage[english]{babel}
+- \usepackage{grffile}
+- \usepackage{rotating}
+- \usepackage{caption}
+- \usepackage{longtable}
+- \usepackage{lscape}
+- \DeclareCaptionLabelFormat{addS}{#1 S#2}
+- \captionsetup[table]{name=Supplementary Table}
+- \renewcommand{\thetable}{S\arabic{table}}
+- \captionsetup[figure]{name=Supplementary Figure}
+- \renewcommand{\thefigure}{S\arabic{figure}}
+---
+```{r loadPackages, include=FALSE, cache=FALSE}
+## load additional packages in this chunk
+library(pander)
+library(knitr)
+library(data.table)
+library(ggplot2)
+library(xtable)
+library(tidyr)
+library(dplyr)
+library(openxlsx)
+library(sensitivity)
+library(igraph)
+library(BioNAR)
+library(UpSetR)
+library(GGally)
+library(ODEsensitivity)
+library(RColorBrewer)
+defDir<-'/Volumes/bucket/GoryaninU/FBA_sensitivity/AGORA2_sobol_no_biomass'
+#cmurl<-'https://raw.githubusercontent.com/tibbdc/GraphCM/main/data/external/'
+cmurl<-'data/'
+```
+
+```{r setup, include=FALSE, cache=FALSE}
+## This chunk should contain global configuration commands.
+## Use this to set knitr options and related things. Everything
+## in this chunk will be included in an appendix to document the
+## configuration used.
+#output <- opts_knit$get("rmarkdown.pandoc.to")
+knitr::opts_knit$set(stop_on_error = 2L)
+
+## By default R code is only included in HTML versions of the report
+## (where it can be collapsed). You can generate a PDF version
+## using rmarkdown::pdf_document to get a copy for print. Extensive
+## chunks of R code may or may not be desired in /hat setting. If you
+## want them simply change the following arguments to `echo = TRUE`.
+## In either case the default can be overwritten for individual chunks.
+#opts_chunk$set(echo = output=="html")
+#opts_chunk$set(warning = output=="html")
+#opts_chunk$set(message = output=="html")
+
+## Cache options
+knitr::opts_chunk$set(cache=TRUE,warning=FALSE)
+
+## Set 'hide.fig.code' to FALSE to include code chunks that
+## produce Figures in the output. Note that this affects all chunks
+## that provide a figure caption.
+knitr::opts_chunk$set(hold=TRUE, hide.fig.code=FALSE)
+
+## Pander options
+pander::panderOptions("digits", 3)
+pander::panderOptions("table.split.table", 160)
+```
+
+```{r functions, include=FALSE,cache=FALSE}
+## Custom functions used in the analysis should go into this chunk.
+## They will be listed in their own section of the appendix.
+
+##==================== Functions ====================##
+getPRCC<-function(file){
+    out<-readRDS(file)
+    idx<-which(sapply(out,nrow)>0)
+    #l<-lapply(out[idx],function(.x).x[which(rownames(.x)=='Solution'),])
+    res<-do.call(rbind,out[idx])
+    return(res)
+}
+
+normPRCC<-function(prcc){
+    prime <- 0.5*log(abs((1+prcc)/(1-prcc)))
+    return(prime)
+}
+signifPRCC<-function(prcc1,prcc2,N1,N2){
+    p1<-length(prcc1)-1
+    p2<-length(prcc2)-1
+    
+    z<-(normPRCC(prcc1)-normPRCC(prcc2))/sqrt(1/(N1-3-p1) + 1/(N2-3-p2))
+}
+
+#' Collect edges connecting pair of currencies and reaction which they both
+#' participate in.
+#'
+#' @param g graph 
+#' @param p pair of currencies
+#'
+#' @return list of character edge identifiers
+#'
+#' @examples
+cleanPairCurrencies<-function(p,g){
+    if(length(p)==2 & all(!is.na(match(p,V(g)$name)))){
+        fre1<-neighbors(g,p[1],mode = 'out')
+        fre2<-neighbors(g,p[2],mode = 'in')
+        fr<-V(g)$name[intersect(fre1,fre2)]
+        tre1<-neighbors(g,p[1],mode = 'in')
+        tre2<-neighbors(g,p[2],mode = 'out')
+        tr<-V(g)$name[intersect(tre1,tre2)]
+        edges<-c()
+        if(length(fr)>0){
+            edges<-c(edges,paste0(p[1],'|',fr),paste0(fr,'|',p[2]))
+        }
+        if(length(tr)>0){
+            edges<-c(edges,paste0(p[2],'|',tr),paste0(tr,'|',p[1]))
+        }
+        return(edges)
+    }else{
+        return(c())
+    }
+}
+
+printTable <-
+  function(mat,main,landscape = TRUE,digits = 0,sig = 0.01,align= 'lllrr',
+           label=paste0('tab:',substr(sub(' ','_',main),0,10)),
+           include.rownames=FALSE) {
+    addtorow          <- list()
+    addtorow$pos      <- list()
+    addtorow$pos[[1]] <- c(0)
+    addtorow$command  <- c(
+      paste(
+        "\\hline \n",
+        "\\endhead \n",
+        "\\hline \n",
+        "\\multicolumn{3}{l}{\\footnotesize Continued on next page} \n",
+        "\\endfoot \n",
+        "\\endlastfoot \n",sep = ""
+      )
+    )
+    if (landscape) {
+      cat(
+        sprintf(
+          "\\newpage\n  \\begin{landscape} \n\\begin{center}\n\\captionof{table}{%s (%d)}\n\\scriptsize",
+          main,dim(mat)[1]
+        )
+      )
+    }else{
+      cat(
+        sprintf(
+          "\\begin{center}\n\\captionof{table}{%s (%d)}\n\\scriptsize",
+          main,dim(mat)[1]
+        )
+      )
+    }
+    #cat(dim(mat),names(mat),'\n')
+    matU<-mat
+    # matU$name<-sanitizestr(mat$name)
+    # matU$description<-sanitizestr(mat$description)
+    # cat(dim(matU),names(matU),'\n')
+    print(
+      xtable(
+        matU,
+        align = align,#paste(align,collapse = ''),
+        digits = digits,auto = TRUE)#,label = label)
+      ,size = "small",include.colnames = TRUE,
+      tabular.environment = "longtable", sanitize.text.function=NULL,#function(.x)sanitizestr(stri_escape_unicode(.x)),
+      floating = FALSE,include.rownames = include.rownames,add.to.row = addtorow,hline.after =
+        c(-1)
+    )
+    cat("\\addtocounter{table}{-1}\n")
+    cat(sprintf("\\label{%s}",label),'\n')
+    if (landscape) {
+      cat("\\end{center}\n \\end{landscape}")
+    }else{
+      cat("\\end{center}\n ")
+    }
+  }
+##==================== Layouts ====================##
+alReCar<-paste0('|l',
+                 '|p{0.25\\textwidth}',#ID
+           '|p{0.29\\textwidth}',#Name
+           '|p{0.39\\textwidth}',#Description
+           '|p{0.15\\textwidth}',#Subsystem
+#           '|l',                #Type
+#           '|r',                #glbComu
+#           '|r',                #Nflux5
+#           '|r',                #Nflux5
+#           '|r',                #Nflux5
+#           '|r',                #Nflux5
+           '|r|'                 #,curComp
+)
+
+alMetCarF<-paste0('|l',#'|p{0.01\\textwidth}',#ID
+           '|p{0.15\\textwidth}',#MetID
+           '|p{0.35\\textwidth}',#Name
+           '|r',                #Nflux5
+           '|r',                #Nflux5
+           '|r',                #Nflux5
+           '|r',                #Nflux5
+#           '|r',                #Nflux5
+#           '|r',                #Nflux5
+           '|r|'                 #,N
+)
+
+alMetCar<-paste0('|l',
+                 '|p{0.25\\textwidth}',#ID
+           '|p{0.39\\textwidth}',#Name
+#           '|p{0.15\\textwidth}',#Subsystem
+#           '|l',                #Type
+#           '|r',                #glbComu
+#           '|r',                #Nflux5
+#           '|r',                #Nflux5
+#           '|r',                #Nflux5
+#           '|r',                #Nflux5
+           '|r|'                 #,curComp
+)
+
+alReCarC<-paste0('|l',
+                 '|p{0.25\\textwidth}',#ID
+           '|p{0.29\\textwidth}',#Name
+           '|p{0.39\\textwidth}',#Description
+           '|p{0.15\\textwidth}',#Subsystem
+#           '|l',                #Type
+           '|r',                #glbComu
+#           '|r',                #Nflux5
+#           '|r',                #Nflux5
+#           '|r',                #Nflux5
+#           '|r',                #Nflux5
+           '|r|'                 #,curComp
+)
+
+alMetCarC<-paste0('|l',
+                 '|p{0.25\\textwidth}',#ID
+           '|p{0.39\\textwidth}',#Name
+#           '|p{0.15\\textwidth}',#Subsystem
+#           '|l',                #Type
+           '|r',                #glbComu
+#           '|r',                #Nflux5
+#           '|r',                #Nflux5
+#           '|r',                #Nflux5
+#           '|r',                #Nflux5
+           '|r|'                 #,curComp
+)
+
+alClSum<-paste0('|p{0.1\\textwidth}',#algorithm
+           '|r',                #N
+           '|r',                #mod
+           '|r',                #C
+           '|r',                #Cn1
+           '|r',                #Cn100
+           '|r',                #mu
+           '|r',                #Min
+           '|r',                #1Q
+           '|r',                #Median
+           '|r',                #Mean
+           '|r',                #3Q
+           '|r|'                 #Max
+)
+
+alORA<-paste0('|p{0.01\\textwidth}',
+#           '|l',                #alg
+           '|r',                #cl
+#           '|r',                #FL
+           '|p{0.15\\textwidth}',#FL
+           '|r',                #N
+           '|r',                #Fn
+           '|r',                #Cn
+           '|r',                #Mu
+           '|r',                #OR
+#           '|r',                #CIl
+#           '|r',                #CIu
+           '|r',                #Fe
+           '|r',                #Fc
+           '|r',                #pval
+           '|r',                #padj
+           '|r',                #palt
+           '|r|'                #paltadj
+)
+alEdgesOne<- paste0('|p{0.01\\textwidth}',#ID '|l',#
+           '|p{0.15\\textwidth}',                #varname 
+           '|p{0.15\\textwidth}',                #MetID.wt 
+           '|r',                #original.wt 
+           '|r',                #pval.wt 
+           '|r',                #card.wt 
+           '|r',                #pAct16 
+           '|r',                #pAct32 
+           '|r',                #pAct64 
+           '|p{0.15\\textwidth}|'                #Name 
+)
+
+alEdges<- paste0('|p{0.01\\textwidth}',#ID '|l',#
+           '|p{0.15\\textwidth}',                #varname 
+           '|p{0.15\\textwidth}',                #MetID.wt 
+           '|r',                #original.wt 
+           '|r',                #pval.wt 
+           '|r',                #original.hisD 
+           '|r',                #pval.hisD 
+           '|r',                #original.hisD2 
+           '|r',                #pval.hisD2 
+           '|r',                #original.trpB 
+           '|r',                #pval.trpB 
+           '|r',                #card.wt 
+           '|r',                #card.hisD
+           '|r',                #card.hisD2
+           '|r',                #card.trpB 
+#           '|p{0.15\\textwidth}',                #Name.wt 
+#           '|p{0.15\\textwidth}',                #HMDF.wt 
+#           '|p{0.15\\textwidth}',                #ChEBI.wt 
+#           '|p{0.15\\textwidth}',                #InChI.wt 
+#           '|p{0.15\\textwidth}',                #SMILES.wt 
+#           '|p{0.15\\textwidth}',                #KEGG.wt 
+#           '|p{0.15\\textwidth}',                #SEED.wt 
+#           '|p{0.15\\textwidth}',                #BiGG.wt 
+#           '|p{0.15\\textwidth}',                #LipidMaps.wt 
+#           '|p{0.15\\textwidth}',                #MetaNetX.wt 
+#           '|p{0.15\\textwidth}',                #Reactome.wt 
+           '|p{0.15\\textwidth}|'                #PubChem.wt 
+)
+```
+
+# Build graph
+
+Reaction and metabolite data were extracted from pyCobra model together with
+Consumption-Production edges and stored in the Excel file. We also took 
+currency metabolites lists from the [GitHub repository](`r cmurl`)in the separate table:
+
+```{r read.data}
+nodes<-read.xlsx('SupplementaryData.xlsx',sheet = 'Table S3')
+nodes$shape<-ifelse(nodes$Type=='metabolite','circle','square')
+edges<-read.xlsx('SupplementaryData.xlsx',sheet = 'Table S4')
+pairCurr<-read.csv(paste0(cmurl,'pairs_of_currency_metabolites.csv'))
+specCurr<-read.csv(paste0(cmurl,'special_currency_metabolites.csv'))
+specCurr$excluded[8:10]<-c('coa[c]','coa[p]','coa[e]')
+```
+
+To take into account reversibility of some reaction, each reversible reaction is
+split into two forward and reversed reaction nodes:
+
+```{r prepare.reversible.reaction.nodes}
+revidx<-grep('<=>',nodes$Description)
+rev_re<-nodes[revidx,]
+rev_re$ID<-paste0(rev_re$ID,'_rev')
+fnodes<-rbind(nodes,rev_re)
+```
+
+Edges connecting reversible reactions are duplicated and reversed as well:
+```{r prepare.reversible.reaction.edges}
+ed_rev_from<-edges[edges$From %in% nodes$ID[revidx],]
+ed_rev_from<-ed_rev_from[,c(2,1,3:4)]
+names(ed_rev_from)<-names(edges)
+ed_rev_from$To<-paste0(ed_rev_from$To,'_rev')
+ed_rev_to<-edges[edges$To %in% nodes$ID[revidx],]
+ed_rev_to<-ed_rev_to[,c(2,1,3:4)]
+names(ed_rev_to)<-names(edges)
+ed_rev_to$From<-paste0(ed_rev_to$From,'_rev')
+fedges<-rbind(edges,ed_rev_from,ed_rev_to)
+```
+
+Now we are ready to recreate model metabolic graph, but we have to clean 
+nodes corresponding to biomass production, macromolecule biosynthesis etc. 
+```{r build.graph}
+g<-graph_from_data_frame(fedges,directed = TRUE,vertices = fnodes)
+ex_names<-paste0('(biomass|dreplication|dnarep|pbiosynthesis|proteinsynth|',
+                 'rtranscription|rnatrans)')
+g<-delete_vertices(g,grep(ex_names,V(g)$name))
+```
+
+## Whole graph weak components
+
+With metabolic graph at hand we can find weakly connected components and check
+their structure:
+```{r analyze.global.components}
+cmp<-components(g,mode = 'weak')
+V(g)$glbComp<-cmp$membership
+g<-BioNAR::markBowTie(g)
+btdf<-makeMembership(g,'BowTie')
+l<-layoutByCluster(g,btdf)
+midx<-which.max(cmp$csize)
+ndf<-igraph::as_data_frame(g,what = 'vertices')
+ndf<-ndf[ndf$glbComp!=midx,]
+mndf<-ndf[ndf$Type=='metabolite',]
+rndf<-ndf[ndf$Type=='reaction'&!grepl('_rev$',ndf$name),]
+```
+```{r plot.global.graph.bowtie, fig.width=8,fig.height=8,fig.cap="\\label{fig:g_bowtie} Layout of the \\textit{E. coli} metabolic network according to its bow-tie decomposition."}
+ggnet2(g,mode=l,color='BowTie', color.palette = "Dark2")
+```
+
+```{r all.graph.components.reaction.table,results='asis',cache=FALSE, echo=TRUE}
+printTable(rndf[order(rndf$glbComp,rndf$Name),c(1:4,7)],
+           main='Reactions outside the main component in the full graph',
+           landscape = TRUE,align = alReCar,label='tab:glbCmpRe')
+```
+```{r all.graph.components.metabolites.table,results='asis',cache=FALSE, echo=TRUE}
+printTable(mndf[order(mndf$glbComp),c(1,2,7)],
+           main='Metabolites outside the main component in the full graph',
+           landscape = FALSE,align = alMetCar,label='tab:glbCmpMet')
+```
+
+There are `r cmp$no` disconnected componens in the graph, main one contains
+`r cmp$csize[midx]` nodes, covering `r 100*cmp$csize[midx]/vcount(g)`% of the 
+graph nodes. Other `r cmp$no-1` components, which contains `r sum(cmp$csize[-midx])`
+vertices, represent mainly transport reactions
+describing cobalt, chloride and arsenic compounds exchange with the environment.
+All nodes in outside of the main connected componet are groped into the Elf Green 
+cluster on the Supplementary figure \ref{fig:g_bowtie}.
+
+# Clean currency metabolites
+
+It is known that currency metabolites distort the graph structure severely, so
+for the following analysis we going to remove them, clean remaining singleton
+reactions and analyse the structure of the clean metabolic graph.
+
+```{r clean.currencies}
+curidx<-lapply(
+    sapply(as.list(specCurr),
+           function(.y){sub(pattern = '_(.+)$','[\\1]',.y)}), 
+    function(.x){
+        idx<-match(.x,V(g)$name)
+        return(idx[!is.na(idx)])
+        })
+gc<-delete_vertices(g,unlist(curidx))
+```
+
+```{r clean.pair.currencies}
+edges<-lapply(as.list(pairCurr),
+              function(.x){
+                  do.call(c,
+                          sapply(
+                              sapply(
+                                  strsplit(.x,','),
+                                  function(.y){
+                                      sub(pattern = '_(.+)$','[\\1]',.y)
+                                  }),
+                              cleanPairCurrencies,g=gc))
+              })
+
+gc<-delete_edges(gc,unlist(edges))
+```
+```{r clean.dungling.nodes}
+ccmp<-components(gc,mode = 'weak')
+gc<-delete_vertices(gc,which(ccmp$membership %in% which(ccmp$csize==1)))
+```
+
+
+## Weak components
+
+First we need to find disconnected componens in the graph and their composition:
+```{r clean.graph.components}
+ccmp<-components(gc,mode = 'weak')
+V(gc)$curComp<-ccmp$membership
+gc<-BioNAR::markBowTie(gc)
+midx<-which.max(ccmp$csize)
+btdf<-makeMembership(gc,'BowTie')
+l<-layoutByCluster(gc,btdf)
+#l<-readRDS('layouts/layout.28.rds')
+ndf<-igraph::as_data_frame(gc,what = 'vertices')
+ndf<-ndf[ndf$curComp!=midx,]
+mndf<-ndf[ndf$Type=='metabolite',]
+rndf<-ndf[ndf$Type=='reaction'&!grepl('_rev$',ndf$name),]
+```
+
+```{r plot.clean.graph.bowtie, fig.width=8,fig.height=8,fig.cap="\\label{fig:gc_bowtie} Layout of the \\textit{E. coli} metabolic network without currency metabolites according to its bow-tie decomposition."}
+ggnet2(gc,mode=l,color='BowTie', color.palette = "Dark2")
+```
+
+```{r clean.graph.components.reaction.table,results='asis',cache=FALSE,echo=TRUE}
+printTable(rndf[order(rndf$curComp,rndf$Name),c(1:4,7,8)],
+           main='Reactions outside the main component in the graph without currency metabolites',
+           landscape = TRUE,align = alReCarC,label='tab:clnCmpRe')
+```
+```{r clean.graph.components.metabolites.table,results='asis',cache=FALSE,echo=TRUE}
+printTable(mndf[order(mndf$curComp),c(1,2,7,8)],
+           main='Metabolites outside the main component in the graph without currency metabolites',
+           landscape = FALSE,align = alMetCarC,label='tab:clnCmpMet')
+```
+
+It could be seen that there is much more disconnected componens in the clean 
+graph (`r ccmp$no` vs. `r cmp$no`), which contains `r nrow(rndf)` reactions and 
+`r nrow(mndf)` metabolites. In the tables above (Supplementary Table S\ref{tab:clnCmpRe} 
+and Supplementary Table S\ref{tab:clnCmpMet}) columns `glbComp` and `curComp`
+contain number of the weak component in the whole and clean graphs correspondently.
+
+## Subsystem Over-representation analysis
+
+To check if disconnected components represent particular functionality in the
+network we run enrichment analysis of Subsystems annotation terms within clean
+graph weak components:
+
+```{r clean.graph.ora}
+res<-clusterORA(gc, alg='curComp', name='Subsystem', vid='name')
+```
+
+The columns in the Supplementary Table S\ref{tab:SubsORA} are the following:
+
+* cl – cluster ID;
+* FL – name of the enriched term;
+* N – number vertices in the network;
+* Fn – number of vertices in the graph annotated by term `FL` ($F_n$);
+* Cn – size of the cluster;
+* Mu – number of vertices in the cluster annotated by term `FL` ($\mu$);
+* OR – odds ratio;
+* Fe – fold enrichment $F_e$;
+* Fc – fold enrichment $F_c$;
+* pval – an enrichment p-value from hypergeometric test;
+* padj – a BY-adjusted p-value;
+* palt – an depletion p-value from hypergeometric test;
+* paltadj – a BY-adjusted depletion p-value
+
+calculated by the BioNAR package.
+
+```{r clean.graph.ora.table,results='asis',cache=FALSE}
+rr<-res[res$padj<=0.1,-c(1,9,10,17)]
+rr<-rr[rr$cl != midx,]
+rr$cl<-as.character(rr$cl)
+rr$N<-as.character(rr$N)
+rr$Fn<-as.character(rr$Fn)
+rr$Cn<-as.character(rr$Cn)
+rr$Mu<-as.character(rr$Mu)
+printTable(rr,
+           main='Subsystem over representations in side gcomponents',
+           landscape = TRUE,align = alORA,digits = -3,label='tab:SubsORA')
+```
+
+
+# FBA Sensitivity Analysis
+
+```{r check.values, echo=FALSE,eval=TRUE}
+#if(!exists('mdir')){mdir<-defDir}
+fnums<-c(7,8,15,16,31,32,63,64)
+mvar<-c("MetID","varname","Name","ExEquation","HMDF","ChEBI","InChI","SMILES","KEGG","SEED","BiGG","LipidMaps","MetaNetX","Reactome","PubChem")
+```
+
+## Escherichia coli str. K12 substr. MG1655
+
+### Read data
+```{r read.rds.wt,eval=TRUE,cache=FALSE}
+d<-"Escherichia_coli_str_K_12_substr_MG1655"
+mdf<-fread(file=file.path('data',paste0(d,'.csv')))
+    fr64<-fread(file.path('data',d,'flux_range_64.csv'))[,-1]
+    lfdr<-list()
+    for(fnum in fnums){
+                frdf<-fread(file = file.path('data',d,paste0('prcc_',fnum,'.csv')))
+        lfdr[[sprintf('fnm%02d',fnum)]]<-frdf
+    }
+frdf<-lfdr$fnm64#do.call(rbind,lfdr)
+sigUpset01<-list()
+sigUpset05<-list()
+sigUpset10<-list()
+tdccVal<-list()
+pvalDif<-list()
+```
+```{r tdcc.8.wt, fig.width=8,fig.height=8,fig.cap="\\label{fig:tdcc_8} Comparison of PRCC ranking calculated on 57344 (A) and 65536 (B) Sobol points."}
+tdccVal[['fnm8']]<-tdcc(rbind(rank(lfdr$fnm07$original[!(is.na(lfdr$fnm07$T) & 
+                                                             is.na(lfdr$fnm08$T))],
+                                   ties.method = "random"),
+                              rank(lfdr$fnm08$original[!(is.na(lfdr$fnm07$T) & 
+                                                             is.na(lfdr$fnm08$T))],
+                                   ties.method = "random")),plot=TRUE,pearson = TRUE)
+n1<-7
+n2<-8
+prcc1<-lfdr[[sprintf('fnm%02d',n1)]]$original
+prcc2<-lfdr[[sprintf('fnm%02d',n2)]]$original
+p1<-length(prcc1)-1
+p2<-length(prcc2)-1
+N1<-8192 * as.numeric(n1)
+N2<-8192 * as.numeric(n2)
+z<-(normPRCC(prcc1)-normPRCC(prcc2))/sqrt(1/(N1-3-p1) + 1/(N2-3-p2))
+pvalDif[[sprintf('fnm%02d',n2)]]<-data.frame(z=z,pval=pnorm(z),grp=sprintf('%06d-%06d',N1,N2),str='wt')
+sigUpset01[[sprintf('fnm%02d',n2)]]<-
+    lfdr[[sprintf('fnm%02d',n2)]]$varname[lfdr[[sprintf('fnm%02d',n2)]]$pval<=0.01]
+sigUpset05[[sprintf('fnm%02d',n2)]]<-
+    lfdr[[sprintf('fnm%02d',n2)]]$varname[lfdr[[sprintf('fnm%02d',n2)]]$pval<=0.05]
+sigUpset10[[sprintf('fnm%02d',n2)]]<-
+    lfdr[[sprintf('fnm%02d',n2)]]$varname[lfdr[[sprintf('fnm%02d',n2)]]$pval<=0.1]
+```
+
+```{r tdcc.16.wt, fig.width=8,fig.height=8,fig.cap="\\label{fig:tdcc_16} Comparison of PRCC ranking calculated on 122880 (A) and 131072 (B) Sobol points."}
+tdccVal[['fnm16']]<-tdcc(rbind(
+    rank(lfdr$fnm15$original[!(is.na(lfdr$fnm15$T) & is.na(lfdr$fnm16$T))],ties.method = "random"),
+    rank(lfdr$fnm16$original[!(is.na(lfdr$fnm15$T) & is.na(lfdr$fnm16$T))],ties.method = "random")),
+    plot=TRUE,pearson = TRUE)
+n1<-15
+n2<-16
+prcc1<-lfdr[[sprintf('fnm%02d',n1)]]$original
+prcc2<-lfdr[[sprintf('fnm%02d',n2)]]$original
+p1<-length(prcc1)-1
+p2<-length(prcc2)-1
+N1<-8192 * n1
+N2<-8192 * n2
+z<-(normPRCC(prcc1)-normPRCC(prcc2))/sqrt(1/(N1-3-p1) + 1/(N2-3-p2))
+pvalDif[[sprintf('fnm%02d',n2)]]<-
+    data.frame(z=z,pval=pnorm(z),grp=sprintf('%06d-%06d',N1,N2),str='wt')
+sigUpset01[[sprintf('fnm%02d',n2)]]<-
+    lfdr[[sprintf('fnm%02d',n2)]]$varname[lfdr[[sprintf('fnm%02d',n2)]]$pval<=0.01]
+sigUpset05[[sprintf('fnm%02d',n2)]]<-
+    lfdr[[sprintf('fnm%02d',n2)]]$varname[lfdr[[sprintf('fnm%02d',n2)]]$pval<=0.05]
+sigUpset10[[sprintf('fnm%02d',n2)]]<-
+    lfdr[[sprintf('fnm%02d',n2)]]$varname[lfdr[[sprintf('fnm%02d',n2)]]$pval<=0.1]
+```
+
+```{r tdcc.32.wt, fig.width=8,fig.height=8,fig.cap="\\label{fig:tdcc_32} Comparison of PRCC ranking calculated on 253952 (A) and 262144 (B) Sobol points."}
+tdccVal[['fnm32']]<-tdcc(rbind(
+    rank(lfdr$fnm31$original[!(is.na(lfdr$fnm31$T) & is.na(lfdr$fnm32$T))],ties.method = "random"),
+    rank(lfdr$fnm32$original[!(is.na(lfdr$fnm31$T) & is.na(lfdr$fnm32$T))],ties.method = "random")),
+    plot=TRUE,pearson = TRUE)
+n1<-31
+n2<-32
+prcc1<-lfdr[[sprintf('fnm%02d',n1)]]$original
+prcc2<-lfdr[[sprintf('fnm%02d',n2)]]$original
+p1<-length(prcc1)-1
+p2<-length(prcc2)-1
+N1<-8192 * n1
+N2<-8192 * n2
+z<-(normPRCC(prcc1)-normPRCC(prcc2))/sqrt(1/(N1-3-p1) + 1/(N2-3-p2))
+pvalDif[[sprintf('fnm%02d',n2)]]<-data.frame(z=z,pval=pnorm(z),grp=sprintf('%06d-%06d',N1,N2),str='wt')
+sigUpset01[[sprintf('fnm%02d',n2)]]<-
+    lfdr[[sprintf('fnm%02d',n2)]]$varname[lfdr[[sprintf('fnm%02d',n2)]]$pval<=0.01]
+sigUpset05[[sprintf('fnm%02d',n2)]]<-
+    lfdr[[sprintf('fnm%02d',n2)]]$varname[lfdr[[sprintf('fnm%02d',n2)]]$pval<=0.05]
+sigUpset10[[sprintf('fnm%02d',n2)]]<-
+    lfdr[[sprintf('fnm%02d',n2)]]$varname[lfdr[[sprintf('fnm%02d',n2)]]$pval<=0.1]
+```
+
+
+```{r tdcc.64.wt, fig.width=8,fig.height=8,fig.cap="\\label{fig:tdcc_64} Comparison of PRCC ranking calculated on 516096 (A) and 524288 (B) Sobol points."}
+tdccVal[['fnm64']]<-tdcc(rbind(
+    rank(lfdr$fnm63$original[!(is.na(lfdr$fnm63$T) & is.na(lfdr$fnm64$T))],ties.method = "random"),
+    rank(lfdr$fnm64$original[!(is.na(lfdr$fnm63$T) & is.na(lfdr$fnm64$T))],ties.method = "random")),
+    plot=TRUE,pearson = TRUE)
+n1<-63
+n2<-64
+prcc1<-lfdr[[sprintf('fnm%02d',n1)]]$original
+prcc2<-lfdr[[sprintf('fnm%02d',n2)]]$original
+p1<-length(prcc1)-1
+p2<-length(prcc2)-1
+N1<-8192 * n1
+N2<-8192 * n2
+z<-(normPRCC(prcc1)-normPRCC(prcc2))/sqrt(1/(N1-3-p1) + 1/(N2-3-p2))
+pvalDif[[sprintf('fnm%02d',n2)]]<-data.frame(z=z,pval=pnorm(z),grp=sprintf('%06d-%06d',N1,N2),str='wt')
+sigUpset01[[sprintf('fnm%06d',N2)]]<-lfdr[[sprintf('fnm%02d',n2)]]$varname[lfdr[[sprintf('fnm%02d',n2)]]$pval<=0.01]
+sigUpset05[[sprintf('fnm%06d',N2)]]<-lfdr[[sprintf('fnm%02d',n2)]]$varname[lfdr[[sprintf('fnm%02d',n2)]]$pval<=0.05]
+sigUpset10[[sprintf('fnm%06d',N2)]]<-lfdr[[sprintf('fnm%02d',n2)]]$varname[lfdr[[sprintf('fnm%02d',n2)]]$pval<=0.1]
+```
+
+```{r tdcc.plot, fig.width=8,fig.height=8,fig.cap="\\label{fig:tdcc_trend} Top-Down Correlation Coefficient (TDCC) vs. number of Sobol points."}
+tdccdf<-as.data.frame(do.call(rbind,tdccVal))
+tdccdf$X<-c(8,16,32,64)*8192
+qplot(X,pearson,data=tdccdf)+geom_line()+theme_bw()
+```
+
+```{r tdcc.table,results='asis'}
+printTable(tdccdf,'TDCC values at different number of Sobol points',
+           landscape = FALSE,align = 'lrrr',include.rownames = TRUE,label = 'tab:TDCC')
+```
+
+```{r pval.diff.plot, fig.width=8,fig.height=8,fig.cap="\\label{fig:pval_trend} Probability that difference of PRCC coefficients is random vs. number of Sobol points."}
+pvalDF<-do.call(rbind,pvalDif)
+p<-ggplot(pvalDF,aes(x=grp,y=pval))+geom_boxplot()+theme_bw()
+print(p)
+```
+
+```{r pval.diff.plot.logy, fig.width=8,fig.height=8,fig.cap="\\label{fig:lpval_trend} Log-probability that difference of PRCC coefficients is random vs. number of Sobol points."}
+p+scale_y_log10()
+```
+
+```{r sig01.upset.plot, fig.width=8,fig.height=8,fig.cap="\\label{fig:upset01} Intersection of sets of fluxes, for which PRCC different from zero at the significance level of 1%, obtained with different number of Sobol points."}
+upset(fromList(sigUpset01),nsets = length(sigUpset01))
+```
+```{r sig05.upset.plot, fig.width=8,fig.height=8,fig.cap="\\label{fig:upset05} Intersection of sets of fluxes, for which PRCC different from zero at the significance level of 5%, obtained with different number of Sobol points."}
+upset(fromList(sigUpset05),nsets = length(sigUpset05))
+```
+```{r sig10.upset.plot, fig.width=8,fig.height=8,fig.cap="\\label{fig:upset10} Intersection of sets of fluxes, for which PRCC different from zero at the significance level of 10%, obtained with different number of Sobol points."}
+upset(fromList(sigUpset10),nsets = length(sigUpset10))
+```
+
+
+```{r make.data.table.wt,eval=TRUE,cache=FALSE}
+df<-as.data.table(frdf)
+df$HMDF["['NaN']"==df$HMDF]<-""
+df$ChEBI["['NaN']"==df$ChEBI]<-""
+df$InChI["['NaN']"==df$InChI]<-""
+df$KEGG["['NaN']"==df$KEGG]<-""
+df$SEED["['NaN']"==df$SEED]<-""
+df$BiGG["['NaN']"==df$BiGG]<-""
+df$LipidMaps["['NaN']"==df$LipidMaps]<-""
+df$MetaNetX["['NaN']"==df$MetaNetX]<-""
+df$Reactome["['NaN']"==df$Reactome]<-""
+df$PubChem["['NaN']"==df$PubChem]<-""
+df$HMDF <- gsub("(\\[|\\]|')",'',df$HMDF)
+df$ChEBI <- gsub("(\\[|\\]|')",'',df$ChEBI)
+df$InChI <- gsub("(\\[|\\]|')",'',df$InChI)
+df$KEGG <- gsub("(\\[|\\]|')",'',df$KEGG)
+df$SEED <- gsub("(\\[|\\]|')",'',df$SEED)
+df$BiGG <- gsub("(\\[|\\]|')",'',df$BiGG)
+df$LipidMaps <- gsub("(\\[|\\]|')",'',df$LipidMaps)
+df$MetaNetX <- gsub("(\\[|\\]|')",'',df$MetaNetX)
+df$Reactome <- gsub("(\\[|\\]|')",'',df$Reactome)
+df$PubChem <- gsub("(\\[|\\]|')",'',df$PubChem)
+df$MicrobeID <- 'wt'
+```
+
+```{r read.active.df16.wt,echo=FALSE,cache=FALSE,eval=TRUE}
+dt<-fread(file=file.path('data',d,'fba_sobol_isactive.csv'))
+idx<-match(names(dt)[-c(1,ncol(dt))],df$varname)
+df$PercActive16[idx]<-apply(as.data.frame(dt)[1:131072,-c(1,ncol(dt))],2,mean)
+df$NActive16[idx]<-apply(as.data.frame(dt)[1:131072,-c(1,ncol(dt))],2,sum)
+```
+```{r read.active.df32.wt,echo=FALSE,cache=FALSE,eval=TRUE}
+df$PercActive32[idx]<-apply(as.data.frame(dt)[1:262144,-c(1,ncol(dt))],2,mean)
+df$NActive32[idx]<-apply(as.data.frame(dt)[1:262144,-c(1,ncol(dt))],2,sum)
+```
+
+```{r read.active.df64.wt,echo=FALSE,cache=FALSE,eval=TRUE}
+dtWT64<-dt
+names(dtWT64)<-sub('^EX_','actEX_',names(dtWT64))
+df$PercActive64[idx]<-apply(as.data.frame(dt)[,-c(1,ncol(dt))],2,mean)
+df$NActive64[idx]<-apply(as.data.frame(dt)[,-c(1,ncol(dt))],2,sum)
+```
+
+```
+{r plot.actbound.distr.wt}
+actCount=rowSums(dtWT64[,grep('^act',names(dtWT64)),with=FALSE])
+qplot(actCount,bins=(1+max(actCount)),
+      main = 'Active bounds number for wild type')+theme_bw()
+qplot(actCount,bins=(1+max(actCount)),log = 'y',
+      main = 'Active bounds number for wild type')+theme_bw()
+```
+
+```
+{r save.flux_act.wt}
+fwrite(df,file = paste0(file.path(mdir,d),'_nz_prcc.csv.gz'),row.names = FALSE,col.names = TRUE)
+```
+
+
+
+```{r filter.df.wt}
+dfAll<-df
+tmp<-as.data.frame(df)
+dfw<-as.data.table(tmp)
+```
+```{r hist.plot.wt,fig.width=8,fig.height=8}
+qplot(df$pval)+
+    xlab('p-value')+
+    ggtitle('Full dataset PRCC significance distribution for wild type')
+```
+
+#### Histidine flux plots
+```{r read.wt.flux.plot.dataset}
+fluxes_WT<-fread(file=file.path('data',d,'mutant_related_fluxes.csv'))
+```
+```{r prepare.wt.his.plot.dataset}
+re_names<-c("ALAHIS1c", "EX_his_L(e)", "HISCAT1pp", "HIS_Ltex", "HISabcpp", "HISt2pp","EX_alahis(e)")
+hisL<-fluxes_WT[,match(paste0(re_names,'_fl'),names(fluxes_WT)),with=FALSE]
+pltDFwt<-data.frame(Solution=fluxes_WT$Solution,
+                  influx_HisL=abs(hisL$`EX_his_L(e)_fl`),
+                  inBound_HisL=fluxes_WT$`EX_his_L(e)_l`,
+                  outBound_HisL=fluxes_WT$`EX_his_L(e)_u`,
+                  activityInflux=factor(dtWT64$`actEX_his_L(e)_l`,levels = c(1,0),labels = c('active','inactive')),
+                  activityOutflux=factor(dtWT64$`actEX_his_L(e)_u`,levels = c(1,0),labels = c('active','inactive')))
+```
+```
+{r plot.wt.his.solvsflux,fig.format='png',fig.dpi=600}
+qplot(Solution,influx_HisL,data = pltDFwt,color = activityInflux,
+      main =bquote("Histidine influx in wildtype"))
+qplot(Solution,influx_HisL,data = pltDFwt,facets = activityInflux ~ .,
+      color = activityInflux,
+      main =bquote("Histidine influx in wildtype"))
+```
+```{r plot.wt.his.bndvssol,fig.format='png',fig.dpi=600}
+qplot(inBound_HisL,Solution,data = pltDFwt,color=activityInflux,log='x',
+      main =bquote("Histidine influx boundary in wildtype"))
+qplot(inBound_HisL,Solution,data = pltDFwt,color=activityInflux,log='x',
+      facets = activityInflux ~ .,
+      main =bquote("Histidine influx boundary in wildtype"))
+```
+
+```{r plot.wt.his.bndvsinflux,fig.format='png',fig.dpi=600}
+qplot(inBound_HisL,influx_HisL,data = pltDFwt,color = activityInflux,log='x',
+      main =bquote("Histidine influx in wildtype"))
+qplot(inBound_HisL,influx_HisL,data = pltDFwt,color = activityInflux,log='x',
+      facets = activityInflux ~ .,
+      main =bquote("Histidine influx in wildtype"))
+```
+
+#### Tryptophan flux plots
+```{r prepare.wt.trpB.plot.dataset}
+re_names<-c("EX_trp_L(e)", "TRPAS2i", "TRPTA", "TRP_Ltex", "TRPt2rpp")
+trpB<-fluxes_WT[,match(paste0(re_names,'_fl'),names(fluxes_WT)),with=FALSE]
+pltDFtrp<-data.frame(Solution=fluxes_WT$Solution,
+                  influx_TrpL=abs(trpB$`EX_trp_L(e)_fl`),
+                  inBound_TrpL=fluxes_WT$`EX_trp_L(e)_l`,
+                  outBound_TrpL=fluxes_WT$`EX_trp_L(e)_u`,
+                  activityInflux=factor(dtWT64$`actEX_trp_L(e)_l`,levels = c(1,0),labels = c('active','inactive')),
+                  activityOutflux=factor(dtWT64$`actEX_trp_L(e)_u`,levels = c(1,0),labels = c('active','inactive')))
+```
+```{r plot.wt.trpB.solvsflux,fig.format='png',fig.dpi=600}
+qplot(Solution,influx_TrpL,data = pltDFtrp,color = activityInflux,
+      main =bquote("Tryptophan influx in wildtype"))
+qplot(Solution,influx_TrpL,data = pltDFtrp,facets = activityInflux ~ .,
+      color = activityInflux,
+      main =bquote("Tryptophan influx in wildtype"))
+```
+```{r plot.wt.trpB.bndvssol,fig.format='png',fig.dpi=600}
+qplot(inBound_TrpL,Solution,data = pltDFtrp,color=activityInflux,log='x',
+      main =bquote("Tryptophan influx boundary in wildtype"))
+qplot(inBound_TrpL,Solution,data = pltDFtrp,color=activityInflux,log='x',
+      facets = activityInflux ~ .,
+      main =bquote("Tryptophan influx boundary in wildtype"))
+```
+
+```{r plot.wt.trpB.bndvsinflu,fig.format='png',fig.dpi=600}
+qplot(inBound_TrpL,influx_TrpL,data = pltDFtrp,color = activityInflux,log='x',
+      main =bquote("Tryptophan influx in wildtype"))
+qplot(inBound_TrpL,influx_TrpL,data = pltDFtrp,color = activityInflux,log='x',
+      facets = activityInflux ~ .,
+      main =bquote("Tryptophan influx in wildtype"))
+```
+
+
+### Interaction type table
+
+```{r interaction.types.wt}
+prnTbl<-df[(card>1),c(1:3,6,32,33,35,37,9)]
+prnTbl10<-prnTbl[(pval<=0.1)]
+pander(table(sign(prnTbl10$original),sub('.+_(.+)$','\\1',prnTbl10$varname)),
+       caption = 'Sign/bound frequency table for wild-type model')
+```
+
+### Substrate table
+```{r prepare.substr.table.wt}
+subTbl<-prnTbl[grepl('.+_l$',varname)&(original>0)]
+subTbl10<-subTbl[(pval<=0.1)]
+```
+
+```{r substr10.met.car.table.wt,results='asis',cache=FALSE}
+printTable(subTbl10[order(pval,-1*original)], digits = 5,
+           main = 'Wild-type substrates',
+           landscape = TRUE,align = alEdgesOne,
+           label = 'tab:SubsWT10')
+```
+
+### Product table
+```{r prepare.prd.table.wt}
+prdTbl<-prnTbl[grepl('.+_u$',varname)&(original>0)]
+prdTbl10<-prdTbl[(pval<=0.1)]
+```
+
+```{r prd10.met.car.table.wt,results='asis',cache=FALSE}
+printTable(prdTbl10[order(pval,-1*original)], digits = 5,
+           main = 'Wild-type products',
+           landscape = TRUE,align = alEdgesOne,
+           label = 'tab:ProdsWT10')
+```
+
+### Attranctant table
+```{r prepare.attr.table.wt}
+attrTbl<-prnTbl[grepl('.+_u$',varname)&(original<0)]
+attrTbl10<-attrTbl[(pval<=0.1)]
+```
+
+```{r attr10.met.car.table.wt,results='asis',cache=FALSE}
+printTable(attrTbl10[order(pval,original)], digits = 5,
+           main = 'Wild-type attractants',
+           landscape = TRUE,align = alEdgesOne,
+           label = 'tab:AttrsWT10')
+```
+
+
+### Repellent table
+```{r prepare.rep.table.wt}
+repTbl<-prnTbl[grepl('.+_l$',varname)&(original<0)]
+repTbl10<-repTbl[(pval<=0.1)]
+```
+
+```{r rep10.met.car.table.wt,results='asis',cache=FALSE}
+printTable(repTbl10[order(pval,original)], digits = 5,
+           main = 'Wild-type repellents',
+           landscape = TRUE,align = alEdgesOne,
+           label = 'tab:RepsWT10')
+```
+
+## Escherichia coli str. K12 substr. MG1655 ko hisD
+
+### Read data
+```{r read.rds.hisD,eval=TRUE,cache=FALSE}
+d<-"Escherichia_coli_str_K_12_substr_MG1655_ko_hisD"
+mdf<-fread(file=file.path('data',paste0(d,'.csv')))
+fr64<-fread(file.path('data',d,'flux_range_64.csv'))
+frdf<-fread(file = file.path('data',d,'prcc_64.csv'))
+```
+
+```{r make.data.table.hisD,eval=TRUE,cache=FALSE}
+df<-as.data.table(frdf)
+df$HMDF["['NaN']"==df$HMDF]<-""
+df$ChEBI["['NaN']"==df$ChEBI]<-""
+df$InChI["['NaN']"==df$InChI]<-""
+df$KEGG["['NaN']"==df$KEGG]<-""
+df$SEED["['NaN']"==df$SEED]<-""
+df$BiGG["['NaN']"==df$BiGG]<-""
+df$LipidMaps["['NaN']"==df$LipidMaps]<-""
+df$MetaNetX["['NaN']"==df$MetaNetX]<-""
+df$Reactome["['NaN']"==df$Reactome]<-""
+df$PubChem["['NaN']"==df$PubChem]<-""
+df$HMDF <- gsub("(\\[|\\]|')",'',df$HMDF)
+df$ChEBI <- gsub("(\\[|\\]|')",'',df$ChEBI)
+df$InChI <- gsub("(\\[|\\]|')",'',df$InChI)
+df$KEGG <- gsub("(\\[|\\]|')",'',df$KEGG)
+df$SEED <- gsub("(\\[|\\]|')",'',df$SEED)
+df$BiGG <- gsub("(\\[|\\]|')",'',df$BiGG)
+df$LipidMaps <- gsub("(\\[|\\]|')",'',df$LipidMaps)
+df$MetaNetX <- gsub("(\\[|\\]|')",'',df$MetaNetX)
+df$Reactome <- gsub("(\\[|\\]|')",'',df$Reactome)
+df$PubChem <- gsub("(\\[|\\]|')",'',df$PubChem)
+df$MicrobeID<-'hisD'
+```
+
+```{r read.active.df16.hisD,echo=FALSE,cache=FALSE,eval=TRUE}
+dt<-fread(file=file.path('data',d,'fba_sobol_isactive.csv'))
+dtHisD64<-dt
+names(dtHisD64)<-sub('^EX_','actEX_',names(dtHisD64))
+idx<-match(names(dt)[-c(1,ncol(dt))],df$varname)
+df$PercActive16[idx]<-apply(as.data.frame(dt)[1:131072,-c(1,ncol(dt))],2,mean)
+df$NActive16[idx]<-apply(as.data.frame(dt)[1:131072,-c(1,ncol(dt))],2,sum)
+```
+```{r read.active.df32.hisD,echo=FALSE,cache=FALSE,eval=TRUE}
+df$PercActive32[idx]<-apply(as.data.frame(dt)[1:262144,-c(1,ncol(dt))],2,mean)
+df$NActive32[idx]<-apply(as.data.frame(dt)[1:262144,-c(1,ncol(dt))],2,sum)
+```
+
+```{r read.active.df64.hisD,echo=FALSE,cache=FALSE,eval=TRUE}
+df$PercActive64[idx]<-apply(as.data.frame(dt)[,-c(1,ncol(dt))],2,mean)
+df$NActive64[idx]<-apply(as.data.frame(dt)[,-c(1,ncol(dt))],2,sum)
+```
+
+
+```
+{r plot.actbound.distr.hisD}
+actCount=rowSums(dtHisD64[,grep('^act',names(dtHisD64)),with=FALSE])
+qplot(actCount,bins=(1+max(actCount)),
+      main = 'Active bounds number for hisD mutant')+theme_bw()
+qplot(actCount,bins=(1+max(actCount)),log = 'y',
+      main = 'Active bounds number for hisD mutant')+theme_bw()
+```
+
+```
+{r save.flux_act.hisD}
+fwrite(df,file = paste0(file.path(mdir,d),'_nz_prcc.csv.gz'),row.names = FALSE,col.names = TRUE)
+```
+
+
+```{r filter.df.hisD}
+dfAll<-rbind(dfAll,df,fill=TRUE)
+#dfw<-merge(dfw,df,by='varname',all.x=TRUE)
+dfw<-merge(dfw,df,by=mvar,all.x=TRUE,suffixes = c('.wt',''))
+#names(dfw)<-sub('.x','.wt',names(dfw))
+#names(dfw)<-sub('.y','',names(dfw))
+```
+```{r hist.plot.hisD,fig.width=8,fig.height=8}
+qplot(df$pval)+
+    xlab('p-value')+
+    ggtitle('Full dataset PRCC significance distribution for hisD')
+```
+
+### Histidine flux plots
+```{r prepare.hisD.plot.dataset}
+fluxes_hisD<-fread(file=file.path('data',d,'mutant_related_fluxes.csv'))
+re_names<-c("ALAHIS1c", "EX_his_L(e)", "HISCAT1pp", "HIS_Ltex", "HISabcpp", "HISt2pp","EX_alahis(e)")
+hisL<-fluxes_hisD[,match(paste0(re_names,'_fl'),names(fluxes_hisD)),with=FALSE]
+pltDFhis<-data.frame(Solution=fluxes_hisD$Solution,
+                  influx_HisL=abs(hisL$`EX_his_L(e)_fl`),
+                  inBound_HisL=fluxes_hisD$`EX_his_L(e)_l`,
+                  outBound_HisL=fluxes_hisD$`EX_his_L(e)_u`,
+                  activityInflux=factor(dtHisD64$`actEX_his_L(e)_l`,levels = c(1,0),labels = c('active','inactive')),
+                  activityOutflux=factor(dtHisD64$`actEX_his_L(e)_u`,levels = c(1,0),labels = c('active','inactive')))
+
+```
+```{r plot.hisD.solvsflux,fig.format='png',fig.dpi=600}
+qplot(Solution,influx_HisL,data = pltDFhis,color = activityInflux,
+      main =bquote("Histidine influx in "~Delta~"hisD mutant"))
+qplot(Solution,influx_HisL,data = pltDFhis,facets = activityInflux ~ .,
+      color = activityInflux,
+      main =bquote("Histidine influx in "~Delta~"hisD mutant"))
+```
+```{r plot.hisD.bndvssol,fig.format='png',fig.dpi=600}
+qplot(inBound_HisL,Solution,data = pltDFhis,color=activityInflux,log='x',
+      main =bquote("Histidine influx boundary in "~Delta~"hisD mutant"))
+qplot(inBound_HisL,Solution,data = pltDFhis,color=activityInflux,log='x',
+      facets = activityInflux ~ .,
+      main =bquote("Histidine influx boundary in "~Delta~"hisD mutant"))
+```
+
+```{r plot.hisD.bndvsinflux,fig.format='png',fig.dpi=600}
+qplot(inBound_HisL,influx_HisL,data = pltDFhis,color = activityInflux,log='x',
+      main =bquote("Histidine influx in "~Delta~"hisD mutant"))
+qplot(inBound_HisL,influx_HisL,data = pltDFhis,color = activityInflux,log='x',
+      facets = activityInflux ~ .,
+      main =bquote("Histidine influx in "~Delta~"hisD mutant"))
+```
+
+
+
+## Interaction type table
+
+```{r interaction.types.hisD}
+prnTbl<-df[(card>1),c(1:3,6,31,32,34,36,8)]
+prnTbl10<-prnTbl[(pval<=0.1)]
+pander(table(sign(prnTbl10$original),sub('.+_(.+)$','\\1',prnTbl10$varname)))
+```
+
+## Substrate table
+```{r prepare.substr.table.hisD}
+subTbl<-prnTbl[grepl('.+_l$',varname)&(original>0)]
+subTbl10<-subTbl[(pval<=0.1)]
+```
+
+```{r substr10.met.car.table.hisD,results='asis',cache=FALSE}
+printTable(subTbl10[order(pval,-1*original)], digits = 5,
+           main = 'hisD substrates',
+           landscape = TRUE,align = alEdgesOne,
+           label = 'tab:SubsHisD10')
+```
+
+## Product table
+```{r prepare.prd.table.hisD}
+prdTbl<-prnTbl[grepl('.+_u$',varname)&(original>0)]
+prdTbl10<-prdTbl[(pval<=0.1)]
+```
+
+```{r prd10.met.car.table.hisD,results='asis',cache=FALSE}
+printTable(prdTbl10[order(pval,-1*original)], digits = 5,
+           main = 'hisD products',
+           landscape = TRUE,align = alEdgesOne,
+           label = 'tab:ProdsHisD10')
+```
+
+## Attranctant table
+```{r prepare.attr.table.hisD}
+attrTbl<-prnTbl[grepl('.+_u$',varname)&(original<0)]
+attrTbl10<-attrTbl[(pval<=0.1)]
+```
+
+```{r attr10.met.car.table.hisD,results='asis',cache=FALSE}
+printTable(attrTbl10[order(pval,original)], digits = 5,
+           main = 'hisD attractants',
+           landscape = TRUE,align = alEdgesOne,
+           label = 'tab:AttrsHisD10')
+```
+
+## Repellent table
+```{r prepare.rep.table.hisD}
+repTbl<-prnTbl[grepl('.+_l$',varname)&(original<0)]
+repTbl10<-repTbl[(pval<=0.1)]
+```
+
+```{r rep10.met.car.table.hisD,results='asis',cache=FALSE}
+printTable(repTbl10[order(pval,original)], digits = 5,
+           main = 'hisD repellents',
+           landscape = TRUE,align = alEdgesOne,
+           label = 'tab:RepsHisD10')
+```
+
+## Escherichia coli str. K12 substr. MG1655 ko hisD no AlaHis transport
+
+### Read data
+```{r read.rds.hisD.noalahis,eval=TRUE,cache=FALSE}
+d<-"Escherichia_coli_str_K_12_substr_MG1655_ko_hisD_block_alahis"
+mdf<-fread(file=file.path('data',paste0(d,'.csv')))
+fr64<-fread(file.path('data',d,'flux_range_64.csv'))
+frdf<-fread(file = file.path('data',d,'prcc_64.csv'))
+```
+
+```{r make.data.table.hisD.noalahis,eval=TRUE,cache=FALSE}
+df<-as.data.table(frdf)
+df$HMDF["['NaN']"==df$HMDF]<-""
+df$ChEBI["['NaN']"==df$ChEBI]<-""
+df$InChI["['NaN']"==df$InChI]<-""
+df$KEGG["['NaN']"==df$KEGG]<-""
+df$SEED["['NaN']"==df$SEED]<-""
+df$BiGG["['NaN']"==df$BiGG]<-""
+df$LipidMaps["['NaN']"==df$LipidMaps]<-""
+df$MetaNetX["['NaN']"==df$MetaNetX]<-""
+df$Reactome["['NaN']"==df$Reactome]<-""
+df$PubChem["['NaN']"==df$PubChem]<-""
+df$HMDF <- gsub("(\\[|\\]|')",'',df$HMDF)
+df$ChEBI <- gsub("(\\[|\\]|')",'',df$ChEBI)
+df$InChI <- gsub("(\\[|\\]|')",'',df$InChI)
+df$KEGG <- gsub("(\\[|\\]|')",'',df$KEGG)
+df$SEED <- gsub("(\\[|\\]|')",'',df$SEED)
+df$BiGG <- gsub("(\\[|\\]|')",'',df$BiGG)
+df$LipidMaps <- gsub("(\\[|\\]|')",'',df$LipidMaps)
+df$MetaNetX <- gsub("(\\[|\\]|')",'',df$MetaNetX)
+df$Reactome <- gsub("(\\[|\\]|')",'',df$Reactome)
+df$PubChem <- gsub("(\\[|\\]|')",'',df$PubChem)
+df$MicrobeID<-'hisD'
+```
+
+
+```{r read.active.df16.hisD.noalahis,echo=FALSE,cache=FALSE,eval=TRUE}
+dt<-fread(file=file.path('data',d,'fba_sobol_isactive.csv'))
+dtHisD64_alahis<-dt
+names(dtHisD64_alahis)<-sub('^EX_','actEX_',names(dtHisD64_alahis))
+idx<-match(names(dt)[-c(1,ncol(dt))],df$varname)
+df$PercActive16[idx]<-apply(as.data.frame(dt)[1:131072,-c(1,ncol(dt))],2,mean)
+df$NActive16[idx]<-apply(as.data.frame(dt)[1:131072,-c(1,ncol(dt))],2,sum)
+```
+```{r read.active.df32.hisD.noalahis,echo=FALSE,cache=FALSE,eval=TRUE}
+df$PercActive32[idx]<-apply(as.data.frame(dt)[1:262144,-c(1,ncol(dt))],2,mean)
+df$NActive32[idx]<-apply(as.data.frame(dt)[1:262144,-c(1,ncol(dt))],2,sum)
+```
+
+```{r read.active.df64.hisD.noalahis,echo=FALSE,cache=FALSE,eval=TRUE}
+df$PercActive64[idx]<-apply(as.data.frame(dt)[,-c(1,ncol(dt))],2,mean)
+df$NActive64[idx]<-apply(as.data.frame(dt)[,-c(1,ncol(dt))],2,sum)
+```
+
+
+```
+{r plot.actbound.distr.hisD.noalahis}
+actCount=rowSums(dtHisD64[,grep('^act',names(dtHisD64)),with=FALSE])
+qplot(actCount,bins=(1+max(actCount)),
+      main = 'Active bounds number for hisD mutant')+theme_bw()
+qplot(actCount,bins=(1+max(actCount)),log = 'y',
+      main = 'Active bounds number for hisD mutant')+theme_bw()
+```
+```{r filter.df.hisD.noalahis}
+dfAll<-rbind(dfAll,df,fill=TRUE )
+#dfw<-merge(dfw,df,by='varname',all.x=TRUE)
+dfw<-merge(dfw,df,by=mvar,all.x=TRUE,suffixes = c('.hisD',''))
+#names(dfw)<-sub('.x','.hisD',names(dfw))
+#names(dfw)<-sub('.y','',names(dfw))
+#names(dfw)<-sub('.y','.hisD2',names(dfw))
+#write.csv(dfw,file='ecoliK12.widePRCC_no_biomass64.csv')
+```
+
+
+```{r hist.plot.hisD.noalahis,fig.width=8,fig.height=8}
+qplot(df$pval)+
+    xlab('p-value')+
+    ggtitle('Full dataset PRCC significance distribution for hisD with AlaHis blocked')
+```
+
+### Histidine flux plots
+```{r prepare.hisD.noalahis.plot.dataset}
+fluxes_hisD_alahis<-fread(file=file.path('data',d,'mutant_related_fluxes.csv'))
+re_names<-c("ALAHIS1c", "EX_his_L(e)", "HISCAT1pp", "HIS_Ltex", "HISabcpp", "HISt2pp")
+hisL<-fluxes_hisD_alahis[,match(paste0(re_names,'_fl'),names(fluxes_hisD)),with=FALSE]
+pltDFhis<-data.frame(Solution=fluxes_hisD_alahis$Solution,
+                  influx_HisL=abs(hisL$`EX_his_L(e)_fl`),
+                  inBound_HisL=fluxes_hisD$`EX_his_L(e)_l`,
+                  outBound_HisL=fluxes_hisD$`EX_his_L(e)_u`,
+                  activityInflux=factor(dtHisD64_alahis$`actEX_his_L(e)_l`,levels = c(1,0),labels = c('active','inactive')),
+                  activityOutflux=factor(dtHisD64_alahis$`actEX_his_L(e)_u`,levels = c(1,0),labels = c('active','inactive')))
+
+```
+```
+{r plot.hisD.noalahis.solvsflux,fig.format='png',fig.dpi=600}
+qplot(Solution,influx_HisL,data = pltDFhis,color = activityInflux,
+      main =bquote("Histidine influx in "~Delta~"hisD mutant"))
+qplot(Solution,influx_HisL,data = pltDFhis,facets = activityInflux ~ .,
+      color = activityInflux,
+      main =bquote("Histidine influx in "~Delta~"hisD mutant"))
+```
+```{r plot.hisD.noalahis.bndvssol,fig.format='png',fig.dpi=600}
+qplot(inBound_HisL,Solution,data = pltDFhis,color=activityInflux,log='x',
+      main =bquote("Histidine influx boundary in "~Delta~"hisD mutant"))
+qplot(inBound_HisL,Solution,data = pltDFhis,color=activityInflux,log='x',
+      facets = activityInflux ~ .,
+      main =bquote("Histidine influx boundary in "~Delta~"hisD mutant"))
+```
+
+```{r plot.hisD.noalahis.bndvsinflux,fig.format='png',fig.dpi=600}
+qplot(inBound_HisL,influx_HisL,data = pltDFhis,color = activityInflux,log='x',
+      main =bquote("Histidine influx in "~Delta~"hisD mutant"))
+qplot(inBound_HisL,influx_HisL,data = pltDFhis,color = activityInflux,log='x',
+      facets = activityInflux ~ .,
+      main =bquote("Histidine influx in "~Delta~"hisD mutant"))
+```
+
+
+
+## Interaction type table
+
+```{r interaction.types.hisD.noalahis}
+#prnTbl<-df[(card>1),c(1:3,6,31,32,34,36,8)]
+prnTbl<-df[(card>1),c(1:3,6,8)]
+prnTbl10<-prnTbl[(pval<=0.1)]
+pander(table(sign(prnTbl10$original),sub('.+_(.+)$','\\1',prnTbl10$varname)))
+```
+
+## Substrate table
+```{r prepare.substr.table.hisD.noalahis}
+subTbl<-prnTbl[grepl('.+_l$',varname)&(original>0)]
+subTbl10<-subTbl[(pval<=0.1)]
+```
+
+```{r substr10.met.car.table.hisD.noalahis,results='asis',cache=FALSE}
+printTable(subTbl10[order(pval,-1*original)], digits = 5,
+           main = 'hisD substrates',
+           landscape = TRUE,align = 'llllll',#align = alEdgesOne,
+           label = 'tab:SubsHisDnoalahis10')
+```
+
+## Product table
+```{r prepare.prd.table.hisD.noalahis}
+prdTbl<-prnTbl[grepl('.+_u$',varname)&(original>0)]
+prdTbl10<-prdTbl[(pval<=0.1)]
+```
+
+```{r prd10.met.car.table.hisD.noalahis,results='asis',cache=FALSE}
+printTable(prdTbl10[order(pval,-1*original)], digits = 5,
+           main = 'hisD products',
+           landscape = TRUE,align = 'llllll',#align = alEdgesOne,
+           label = 'tab:ProdsHisDnoalahis10')
+```
+
+## Attranctant table
+```{r prepare.attr.table.hisD.noalahis}
+attrTbl<-prnTbl[grepl('.+_u$',varname)&(original<0)]
+attrTbl10<-attrTbl[(pval<=0.1)]
+```
+
+```{r attr10.met.car.table.hisD.noalahis,results='asis',cache=FALSE}
+printTable(attrTbl10[order(pval,original)], digits = 5,
+           main = 'hisD attractants',
+           landscape = TRUE,align = 'llllll',#align = alEdgesOne,
+           label = 'tab:AttrsHisDnoalahis10')
+```
+
+## Repellent table
+```{r prepare.rep.table.hisD.noalahis}
+repTbl<-prnTbl[grepl('.+_l$',varname)&(original<0)]
+repTbl10<-repTbl[(pval<=0.1)]
+```
+
+```{r rep10.met.car.table.hisD.noalahis,results='asis',cache=FALSE}
+printTable(repTbl10[order(pval,original)], digits = 5,
+           main = 'hisD repellents',
+           landscape = TRUE,align = 'llllll',#align = alEdgesOne,
+           label = 'tab:RepsHisDnoalahis10')
+```
+
+
+# Escherichia coli str. K12 substr. MG1655 ko trpB
+
+## Read data
+```{r read.rds.trpB,eval=TRUE,cache=FALSE}
+    d<-"Escherichia_coli_str_K_12_substr_MG1655_ko_trpB"
+mdf<-fread(file=file.path('data',paste0(d,'.csv')))
+fr64<-fread(file.path('data',d,'flux_range_64.csv'))
+frdf<-fread(file = file.path('data',d,'prcc_64.csv'))
+```
+
+```{r make.data.table.trpB,eval=TRUE,cache=FALSE}
+df<-as.data.table(frdf)
+df$HMDF["['NaN']"==df$HMDF]<-""
+df$ChEBI["['NaN']"==df$ChEBI]<-""
+df$InChI["['NaN']"==df$InChI]<-""
+df$KEGG["['NaN']"==df$KEGG]<-""
+df$SEED["['NaN']"==df$SEED]<-""
+df$BiGG["['NaN']"==df$BiGG]<-""
+df$LipidMaps["['NaN']"==df$LipidMaps]<-""
+df$MetaNetX["['NaN']"==df$MetaNetX]<-""
+df$Reactome["['NaN']"==df$Reactome]<-""
+df$PubChem["['NaN']"==df$PubChem]<-""
+df$HMDF <- gsub("(\\[|\\]|')",'',df$HMDF)
+df$ChEBI <- gsub("(\\[|\\]|')",'',df$ChEBI)
+df$InChI <- gsub("(\\[|\\]|')",'',df$InChI)
+df$KEGG <- gsub("(\\[|\\]|')",'',df$KEGG)
+df$SEED <- gsub("(\\[|\\]|')",'',df$SEED)
+df$BiGG <- gsub("(\\[|\\]|')",'',df$BiGG)
+df$LipidMaps <- gsub("(\\[|\\]|')",'',df$LipidMaps)
+df$MetaNetX <- gsub("(\\[|\\]|')",'',df$MetaNetX)
+df$Reactome <- gsub("(\\[|\\]|')",'',df$Reactome)
+df$PubChem <- gsub("(\\[|\\]|')",'',df$PubChem)
+df$MicrobeID<-'trpB'
+```
+
+```{r read.active.df16.trpB,echo=FALSE,cache=FALSE,eval=TRUE}
+dt<-fread(file=file.path('data',d,'fba_sobol_isactive.csv'))
+dtTrpB64<-dt
+names(dtTrpB64)<-sub('^EX_','actEX_',names(dtTrpB64))
+idx<-match(names(dt)[-c(1,ncol(dt))],df$varname)
+df$PercActive16[idx]<-apply(as.data.frame(dt)[1:131072,-c(1,ncol(dt))],2,mean)
+df$NActive16[idx]<-apply(as.data.frame(dt)[1:131072,-c(1,ncol(dt))],2,sum)
+```
+```{r read.active.df32.trpB,echo=FALSE,cache=FALSE,eval=TRUE}
+df$PercActive32[idx]<-apply(as.data.frame(dt)[1:262144,-c(1,ncol(dt))],2,mean)
+df$NActive32[idx]<-apply(as.data.frame(dt)[1:262144,-c(1,ncol(dt))],2,sum)
+```
+
+```{r read.active.df64.trpB,echo=FALSE,cache=FALSE,eval=TRUE}
+df$PercActive64[idx]<-apply(as.data.frame(dt)[,-c(1,ncol(dt))],2,mean)
+df$NActive64[idx]<-apply(as.data.frame(dt)[,-c(1,ncol(dt))],2,sum)
+```
+
+```
+{r plot.actbound.distr.trpB}
+actCount=rowSums(dtTrpB64[,grep('^act',names(dtTrpB64)),with=FALSE])
+qplot(actCount,bins=(1+max(actCount)),
+      main = 'Active bounds number for trpB mutant')+theme_bw()
+qplot(actCount,bins=(1+max(actCount)),log = 'y',
+      main = 'Active bounds number for trpB mutant')+theme_bw()
+```
+
+```
+{r save.flux_act.trpB}
+fwrite(df,file = paste0(file.path(mdir,d),'_nz_prcc.csv.gz'),row.names = FALSE,col.names = TRUE)
+```
+
+
+```{r filter.df.trpB}
+dfAll<-rbind(dfAll,df,fill=TRUE )
+#dfw<-merge(dfw,df,by='varname',all.x=TRUE)
+dfw<-merge(dfw,df,by=mvar,all.x=TRUE,suffixes = c('.hisD2','.trpB'))
+#names(dfw)<-sub('.x','.hisD2',names(dfw))
+#names(dfw)<-sub('.y','.trpB',names(dfw))
+#write.csv(dfw,file='ecoliK12.widePRCC_no_biomass64.csv')
+```
+```{r hist.plot.trpB,fig.width=8,fig.height=8}
+qplot(df$pval)+
+    xlab('p-value')+
+    ggtitle('Full dataset PRCC significance distribution for trpB')
+```
+
+### Tryptophan flux plots
+```{r prepare.trpB.plot.dataset}
+fluxes_trpB<-fread(file=file.path('data',d,'mutant_related_fluxes.csv'))
+re_names<-c("EX_trp_L(e)", "TRPAS2i", "TRPTA", "TRP_Ltex", "TRPt2rpp")
+trpB<-fluxes_trpB[,match(paste0(re_names,'_fl'),names(fluxes_trpB)),with=FALSE]
+pltDFtrp<-data.frame(Solution=fluxes_trpB$Solution,
+                  influx_TrpL=abs(trpB$`EX_trp_L(e)_fl`),
+                  inBound_TrpL=fluxes_trpB$`EX_trp_L(e)_l`,
+                  outBound_TrpL=fluxes_trpB$`EX_trp_L(e)_u`,
+                  activityInflux=factor(dtTrpB64$`actEX_trp_L(e)_l`,levels = c(1,0),labels = c('active','inactive')),
+                  activityOutflux=factor(dtTrpB64$`actEX_trp_L(e)_u`,levels = c(1,0),labels = c('active','inactive')))
+```
+```
+{r plot.trpB.solvsflux,fig.format='png',fig.dpi=600}
+qplot(Solution,influx_TrpL,data = pltDFtrp,color = activityInflux,
+      main =bquote("Tryptophan influx in "~Delta~"trpB mutant"))
+qplot(Solution,influx_TrpL,data = pltDFtrp,facets = activityInflux ~ .,
+      color = activityInflux,
+      main =bquote("Tryptophan influx in "~Delta~"trpB mutant"))
+```
+```{r plot.trpB.bndvssol,fig.format='png',fig.dpi=600}
+qplot(inBound_TrpL,Solution,data = pltDFtrp,color=activityInflux,log='x',
+      main =bquote("Tryptophan influx boundary in "~Delta~"trpB mutant"))
+qplot(inBound_TrpL,Solution,data = pltDFtrp,color=activityInflux,log='x',
+      facets = activityInflux ~ .,
+      main =bquote("Tryptophan influx boundary in "~Delta~"trpB mutant"))
+```
+
+```{r plot.trpB.bndvsinflux,fig.format='png',fig.dpi=600}
+qplot(inBound_TrpL,influx_TrpL,data = pltDFtrp,color = activityInflux,log='x',
+      main =bquote("Tryptophan influx in "~Delta~"trpB mutant"))
+qplot(inBound_TrpL,influx_TrpL,data = pltDFtrp,color = activityInflux,log='x',
+      facets = activityInflux ~ .,
+      main =bquote("Tryptophan influx in "~Delta~"trpB mutant"))
+```
+
+## Interaction type table
+
+```{r interaction.types.trpB}
+prnTbl<-df[(card>1),c(1:3,6,31,32,34,36,8)]
+prnTbl10<-prnTbl[(pval<=0.1)]
+pander(table(sign(prnTbl10$original),sub('.+_(.+)$','\\1',prnTbl10$varname)))
+```
+
+## Substrate table
+```{r prepare.substr.table.trpB}
+subTbl<-prnTbl[grepl('.+_l$',varname)&(original>0)]
+subTbl10<-subTbl[(pval<=0.1)]
+```
+
+```{r substr10.met.car.table.trpB,results='asis',cache=FALSE}
+printTable(subTbl10[order(pval,-1*original)], digits = 5,
+           main = 'trpB substrates',
+           landscape = TRUE,align = alEdgesOne,
+           label = 'tab:SubsTrpB10')
+```
+
+## Product table
+```{r prepare.prd.table.trpB}
+prdTbl<-prnTbl[grepl('.+_u$',varname)&(original>0)]
+prdTbl10<-prdTbl[(pval<=0.1)]
+```
+
+```{r prd10.met.car.table.trpB,results='asis',cache=FALSE}
+printTable(prdTbl10[order(pval,-1*original)], digits = 5,
+           main = 'trpB products',
+           landscape = TRUE,align = alEdgesOne,
+           label = 'tab:ProdsTrpB10')
+```
+
+## Attranctant table
+```{r prepare.attr.table.trpB}
+attrTbl<-prnTbl[grepl('.+_u$',varname)&(original<0)]
+attrTbl10<-attrTbl[(pval<=0.1)]
+```
+
+```{r attr10.met.car.table.trpB,results='asis',cache=FALSE}
+printTable(attrTbl10[order(pval,original)], digits = 5,
+           main = 'trpB attractants',
+           landscape = TRUE,align = alEdgesOne,
+           label = 'tab:AttrsTrpB10')
+```
+
+## Repellent table
+```{r prepare.rep.table.trpB}
+repTbl<-prnTbl[grepl('.+_l$',varname)&(original<0)]
+repTbl10<-repTbl[(pval<=0.1)]
+```
+
+```{r rep10.met.car.table.trpB,results='asis',cache=FALSE}
+printTable(repTbl10[order(pval,original)], digits = 5,
+           main = 'trpB repellents',
+           landscape = TRUE,align = alEdgesOne,
+           label = 'tab:RepsTrpB10')
+```
+
+# Sensome Intersections
+```{r upset.plot}
+upsetinput<-list(wt=dfw$varname[dfw$pval.wt<0.10],
+                 hisD=dfw$varname[dfw$pval.hisD<0.1],
+                 hisD2=dfw$varname[dfw$pval.hisD2<0.1],
+                 trpB=dfw$varname[dfw$pval.trpB<0.1])
+upset(fromList(upsetinput))
+```
+
+```{r venn.plot,fig.width=6,fig.height=6}
+gplots::venn(upsetinput)
+```
+
+# Unique flux intersections
+```{r uflux.upset}
+ufluxUpset<-list(wt=dfw$varname[dfw$card.wt==1],
+                 hisD=dfw$varname[dfw$card.hisD==1],
+                 hisD2=dfw$varname[dfw$card.hisD2==1],
+                 trpB=dfw$varname[dfw$card.trpB==1])
+upset(fromList(ufluxUpset))
+```
+
+```{r uflux.venn,fig.height=6,fig.width=6}
+gplots::venn(ufluxUpset)
+```
+
+# Inactive constraint intersections
+```
+{r inact.upset}
+inactUpset<-list(wt=dfw$varname[(dfw$PercActive32.wt==0)&(dfw$card.wt>1)],
+                 hisD=dfw$varname[(dfw$PercActive32.hisD==0)&(dfw$card.hisD>1)],
+                 trpB=dfw$varname[(dfw$PercActive32.trpB==0)&(dfw$card.trpB>1)])
+upset(fromList(inactUpset))
+```
+
+```
+{r inact.venn,fig.height=6,fig.width=6}
+gplots::venn(inactUpset)
+```
+
+# Active constraint sensomes intersections
+```
+{r act.upset}
+actUpset<-list(wt=dfw$varname[(dfw$pval.wt<0.10)&(dfw$PercActive32.wt>0)&(dfw$card.wt>1)],
+                 hisD=dfw$varname[(dfw$pval.hisD<0.10)&(dfw$PercActive32.hisD>0)&(dfw$card.hisD>1)],
+                 trpB=dfw$varname[(dfw$pval.trpB<0.10)&(dfw$PercActive32.trpB>0)&(dfw$card.trpB>1)])
+upset(fromList(actUpset))
+```
+
+```
+{r act.venn,fig.height=6,fig.width=6}
+gplots::venn(actUpset)
+```
+
+
+
+# Make tables
+
+```{r filter.df}
+df10<-dfAll[pval<0.1]
+df5<-df10[pval<0.05]
+df1<-df5[pval<0.01]
+df<-dfAll
+```
+```{r plot.originals.hisD}
+qplot(original.wt,original.wt-original.hisD,data = dfw)+
+    xlab('PRCC wild type')+
+    ggtitle('Variation of PRCC values between wild type and hisD')
+```
+```{r plot.originals.hisD2}
+qplot(original.wt,original.wt-original.hisD2,data = dfw)+
+    xlab('PRCC wild type')+
+    ggtitle('Variation of PRCC values between wild type and hisD  no AlaHis transport')
+```
+
+```{r plot.originals.trpB}
+qplot(original.wt,original.wt-original.trpB,data = dfw)+
+    xlab('PRCC wild type')+
+    ggtitle('Variation of PRCC values between wild type and trpB')
+```
+
+```{r plot.pvals.hisD}
+qplot(pval.wt,pval.wt-pval.hisD,data = dfw)+
+    xlab('PRCC wild type')+
+    ggtitle('Variation of PRCC values between wild type and hisD')
+```
+
+```{r plot.pvals.hisD2}
+qplot(pval.wt,pval.wt-pval.hisD,data = dfw)+
+    xlab('PRCC wild type')+
+    ggtitle('Variation of PRCC values between wild type and hisD  no AlaHis transport')
+```
+
+```{r plot.pvals.trpB}
+qplot(pval.wt,pval.wt-pval.trpB,data = dfw)+
+    xlab('PRCC wild type')+
+    ggtitle('Variation of PRCC values between wild type and trpB')
+```
+
+```{r sig.fluxes.table,results='asis'}
+tdf<-df[,.(Nf100=length(unique(varname)),
+           Nm100=length(unique(MetID)),
+           Nsc100=length(which(card==1))),
+        by=.(Strain)]
+tdf10<-df10[,.(Nf10=length(unique(varname)),
+               Nm10=length(unique(MetID)),
+               Nsc10=length(which(card==1))),
+            by=.(Strain)]
+tdf5<-df5[,.(Nf5=length(unique(varname)),
+             Nm5=length(unique(MetID)),
+             Nsc5=length(which(card==1))),
+          by=.(Strain)]
+tdf1<-df1[,.(Nf1=length(unique(varname)),
+             Nm1=length(unique(MetID)),
+             Nsc1=length(which(card==1))),
+          by=.(Strain)]
+ftdf<-merge(merge(merge(tdf,tdf10,by='Strain'),
+                  tdf5,by='Strain'),
+            tdf1,by='Strain')
+```
+
+```{r print.sig.fluxes.table,results='asis',cache=FALSE,eval=FALSE}
+#names(ftdf)<-c('Strain','N_100','N_10','N_5','N_1')
+printTable(ftdf[order(ftdf$Nf100,decreasing = TRUE),],
+           main = 'Number of Fluxes at various significance levels',
+           landscape = TRUE,align = alFlMet)
+```
+
+## Bidirectional metabolites at P-val 0.1
+```{r bidir.met.p10}
+mdf10<-df10[,.(N=length(unique(varname))),by=.(Strain,MetID,Name)][N>1]
+fmdf10<-merge(mdf10,df10,by=c('Strain','MetID','Name'))
+dlgpval10<-fmdf10[,.(dlg=mean(abs(diff(log10(pval)))),
+                     sgn=prod(sign(original))),
+                  by=.(Strain,MetID,Name)]
+fmdf10<-merge(fmdf10,dlgpval10,by=c('Strain','MetID','Name'))
+metCar<-fmdf10[,.(N=length(unique(Strain)),
+                  Nc_16=length(unique(Strain[which(card==1)])),
+                  #Nc_64=length(unique(Strain[which(card_64==1)])),
+                  Nr_16=length(unique(Strain[which(range<=1e-5)])),
+                  #Nr_64=length(unique(Strain[which(range_64<=1e-5)])),
+                  Nlgdif=length(unique(Strain[which(dlg<1)])),
+                  Nsign=length(unique(Strain[which(sgn>0)]))),
+               by=.(MetID,Name)]
+```
+
+```{r bidir.met.car.table.p10,results='asis',cache=FALSE}
+printTable(metCar[order(metCar$N,decreasing = TRUE),],
+           main = 'Frequency of bidirectional metabolites pval=0.1',
+           landscape = FALSE,align = alMetCarF)
+
+```
+
+## Bidirectional metabolites at P-val 0.05
+```{r bidir.met.p5}
+mdf5<-df5[,.(N=length(unique(varname))),by=.(Strain,MetID,Name)][N>1]
+fmdf5<-merge(mdf5,df5,by=c('Strain','MetID','Name'))
+dlgpval5<-fmdf5[,.(dlg=mean(abs(diff(log10(pval)))),
+                     sgn=prod(sign(original))),
+                by=.(Strain,MetID,Name)]
+fmdf5<-merge(fmdf5,dlgpval5,by=c('Strain','MetID','Name'))
+metCar<-fmdf5[,.(N=length(unique(Strain)),
+                  Nc_16=length(unique(Strain[which(card==1)])),
+                  #Nc_64=length(unique(Strain[which(card_64==1)])),
+                  Nr_16=length(unique(Strain[which(range<=1e-5)])),
+                  #Nr_64=length(unique(Strain[which(range_64<=1e-5)])),
+                  Nlgdif=length(unique(Strain[which(dlg<1)])),
+                  Nsign=length(unique(Strain[which(sgn>0)]))),
+               by=.(MetID,Name)]
+```
+
+```{r bidir.met.car.table.p5,results='asis',cache=FALSE}
+printTable(metCar[order(metCar$N,decreasing = TRUE),],
+           main = 'Frequency of bidirectional metabolites pval=0.05',
+           landscape = FALSE,align = alMetCarF)
+
+```
+
+
+## Bidirectional metabolites at P-val 0.01
+```{r bidir.met.p1}
+mdf1<-df1[,.(N=length(unique(varname))),by=.(Strain,MetID,Name)][N>1]
+fmdf1<-merge(mdf1,df1,by=c('Strain','MetID','Name'))
+dlgpval1<-fmdf1[,.(dlg=mean(abs(diff(log10(pval)))),
+                     sgn=prod(sign(original))),
+                by=.(Strain,MetID,Name)]
+fmdf1<-merge(fmdf1,dlgpval1,by=c('Strain','MetID','Name'))
+metCar<-fmdf1[,.(N=length(unique(Strain)),
+                  Nc_16=length(unique(Strain[which(card==1)])),
+                  #Nc_64=length(unique(Strain[which(card_64==1)])),
+                  Nr_16=length(unique(Strain[which(range<=1e-5)])),
+                  #Nr_64=length(unique(Strain[which(range_64<=1e-5)])),
+                  Nlgdif=length(unique(Strain[which(dlg<1)])),
+                  Nsign=length(unique(Strain[which(sgn>0)]))),
+               by=.(MetID,Name)]
+```
+
+```{r bidir.met.car.table.p1,results='asis',cache=FALSE}
+printTable(metCar[order(metCar$N,decreasing = TRUE),],
+           main = 'Frequency of bidirectional metabolites pval=0.01',
+           landscape = FALSE,align = alMetCarF)
+```
+
+## Interaction type table for all three models
+```{r interaction.types}
+#prnTbl<-dfw[,c(1:3,6,33,36,62,65,9,11:21)]
+prnTbl<-dfw[(card.wt>1)|(card.hisD>1)|(card.trpB>1),
+            c(1:2,
+              grep('original',names(dfw)),
+              grep('pval',names(dfw)),
+              grep('card',names(dfw)),
+              grep('Name',names(dfw))),with=FALSE]
+#prnTbl$type<-sub('.+_(.+)$','\\1',prnTbl$varname)
+#prnTbl10<-prnTbl[(pval.wt<=0.1)|(pval.hisD<=0.1)|(pval.trpB<=0.1)]
+prnTbl10<-prnTbl[(pval.wt<=0.1)]
+pander(table(sign(prnTbl10$original.wt),sub('.+_(.+)$','\\1',prnTbl10$varname)))
+```
+
+## Substrate table fo all three models
+```{r prepare.substr.table}
+subTbl<-prnTbl[grepl('.+_l$',varname)&((original.wt>0)|(original.hisD>0)|(original.trpB>0))]
+subTbl10<-subTbl[(pval.wt<=0.1)|(pval.hisD<=0.1)|(pval.trpB<=0.1)]
+```
+
+```{r substr10.met.car.table,results='asis',cache=FALSE}
+printTable(subTbl10[order(pval.wt,-1*original.wt)], digits = 5,
+           main = 'All models significant substrates',
+           landscape = TRUE,align = alEdges)
+```
+
+```{r substr.met.car.table,results='asis',cache=FALSE}
+printTable(subTbl[order(pval.wt,-1*original.wt)], digits = 5,
+           main = 'All models substrates',
+           landscape = TRUE,align = alEdges)
+```
+
+## Product table for all models
+```{r prepare.prd.table}
+prdTbl<-prnTbl[grepl('.+_u$',varname)&((original.wt>0)|(original.hisD>0)|(original.trpB>0))]
+prdTbl10<-prdTbl[(pval.wt<=0.1)|(pval.hisD<=0.1)|(pval.trpB<=0.1)]
+```
+
+```{r prd10.met.car.table,results='asis',cache=FALSE}
+printTable(prdTbl10[order(pval.wt,-1*original.wt)], digits = 5,
+           main = 'All models significant products',
+           landscape = TRUE,align = alEdges)
+```
+
+```{r prd.met.car.table,results='asis',cache=FALSE}
+printTable(prdTbl[order(pval.wt,-1*original.wt)], digits = 5,
+           main = 'All models products',
+           landscape = TRUE,align = alEdges)
+```
+
+## Attranctant table for all models
+```{r prepare.attr.table}
+attrTbl<-prnTbl[grepl('.+_u$',varname)&((original.wt<0)|(original.hisD<0)|(original.trpB<0))]
+attrTbl10<-attrTbl[(pval.wt<=0.1)|(pval.hisD<=0.1)|(pval.trpB<=0.1)]
+```
+
+```{r attr10.met.car.table,results='asis',cache=FALSE}
+printTable(attrTbl10[order(pval.wt,original.wt)], digits = 5,
+           main = 'All models significant attractants',
+           landscape = TRUE,align = alEdges)
+```
+
+
+```{r attr.met.car.table,results='asis',cache=FALSE}
+printTable(attrTbl[order(pval.wt,original.wt)], digits = 5,
+           main = 'All models attractants',
+           landscape = TRUE,align = alEdges)
+```
+
+## Repellent table for all models
+```{r prepare.rep.table}
+repTbl<-prnTbl[grepl('.+_l$',varname)&((original.wt<0)|(original.hisD<0)|(original.trpB<0))]
+repTbl10<-repTbl[(pval.wt<=0.1)|(pval.hisD<=0.1)|(pval.trpB<=0.1)]
+```
+
+```{r rep10.met.car.table,results='asis',cache=FALSE}
+printTable(repTbl10[order(pval.wt,original.wt)], digits = 5,
+           main = 'All models significant repellents',
+           landscape = TRUE,align = alEdges)
+```
+
+```{r rep.met.car.table,results='asis',cache=FALSE}
+printTable(repTbl[order(pval.wt,original.wt)], digits = 5,
+           main = 'All models repellents',
+           landscape = TRUE,align = alEdges)
+```
+
+# Compare solution distributions
+```
+{r prepare.ecdf}
+ecdfWT<-ecdf(dfSolution[Strain=='wt']$Solution)
+ecdfHisD<-ecdf(dfSolution[Strain=='hisD']$Solution)
+ecdfTrpB<-ecdf(dfSolution[Strain=='trpB']$Solution)
+tt5<-seq(min(dfSolution$Solution),max(dfSolution$Solution),by=5)
+vHisD5<-ecdfHisD(tt5)
+vTrpB5<-ecdfTrpB(tt5)
+vWT5<-ecdfWT(tt5)
+```
+```
+{r plot.ecdf.diff.TrpB}
+pltdf<-data.frame(tt=tt5,diffTrpB=(vTrpB5-vWT5),diffHisD=(vHisD5-vWT5))
+ggplot(pltdf,aes(x=tt5,y=diffTrpB))+geom_line()+
+    xlab('Optimal solution value')+
+    ylab(bquote("Difference between "~Delta~"trpB and wild type ECDF"))+
+    theme_bw()
+```
+
+
+```
+{r KS.test.HisD}
+ks.test(dfSolution[Strain=='wt']$Solution,dfSolution[Strain=='hisD']$Solution)
+```
+
+```
+{r KS.test.TrpB}
+ks.test(dfSolution[Strain=='wt']$Solution,dfSolution[Strain=='trpB']$Solution)
+```
+
+```
+{r KS.test.TrpB.less}
+ks.test(dfSolution[Strain=='wt']$Solution,dfSolution[Strain=='trpB']$Solution,alternative = 'less')
+```
+
+# Glycerol 3-phosphate
+```
+{r check.bound.activity.wt}
+pander(table(dtWT64$`actEX_glyc3p(e)_l`,dtWT64$`actEX_glyc3p(e)_u`),caption='Counts')
+pander(table(dtWT64$`actEX_glyc3p(e)_l`,dtWT64$`actEX_glyc3p(e)_u`)*100/nrow(dtWT64),caption='Percentage')
+```
+```
+{r prepare.data.table.glyc3p}
+dt<-dtWT64[,grep('glyc3p',names(dtWT64)),with=FALSE]
+#names(dt)<-paste0('act_',names(dt))
+dt$group=paste0(dtWT64$`actEX_glyc3p(e)_l`,dtWT64$`actEX_glyc3p(e)_u`)
+dfluxWT64glyc3p<-dfluxWT64[,grep('(glyc3p|Solution)',colnames(dfluxWT64)),with=FALSE]
+
+dtglyc3p<-cbind(dfluxWT64glyc3p,dt)
+```
+
+```
+{r glyc3p.densplot}
+p<-ggplot(dtglyc3p,aes(x=`EX_glyc3p(e)_fl`,color=group))+geom_density()
+p+theme_bw()
+```
+
+
+# Appendix {.tabset}
+## Functions
+```{r functions, eval=FALSE, include=TRUE}
+```
+
+## Setup R
+```{r setup, eval=FALSE}
+```
+
+## Versions
+
+### Session Info
+```{r sessionInfo, echo=FALSE, results='asis', class='text', warning=FALSE}
+si<-devtools::session_info()
+cat('Platform\n\n')
+pander::pander(si$platform)
+cat('Packages\n\n')
+knitr::kable(as.data.frame(si$packages)[,c('ondiskversion','loadedversion','date','source')],align = c('l','l'))
+```
+
+## List of figures
+
+\listoffigures
+
+## List of tables
+
+\listoftables
