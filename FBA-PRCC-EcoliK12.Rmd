@@ -581,7 +581,7 @@ We have calculated PRCC coefficients for all exchange reactions for the
 metabolic model of *Escherichia coli str. K12 substr. MG1655* taken from the
 AGORA2 collection [@Heinken:2023Genomescale]. The following code loads that data:
 
-```{r read.rds.wt,eval=TRUE,cache=FALSE}
+```{r read.rds.wt,eval=TRUE,cache=TRUE}
 d<-"Escherichia_coli_str_K_12_substr_MG1655"
 mdf<-fread(file=file.path('data',paste0(d,'.csv')))
     fr64<-fread(file.path('data',d,'flux_range_64.csv'))[,-1]
@@ -593,7 +593,7 @@ mdf<-fread(file=file.path('data',paste0(d,'.csv')))
 frdf<-lfdr$fnm64#do.call(rbind,lfdr)
 ```
 
-```{r make.data.table.wt,eval=TRUE,cache=FALSE}
+```{r make.data.table.wt,eval=TRUE,cache=TRUE}
 df<-as.data.table(frdf)
 df$HMDF["['NaN']"==df$HMDF]<-""
 df$ChEBI["['NaN']"==df$ChEBI]<-""
@@ -621,17 +621,20 @@ df$MicrobeID <- 'wt'
 ```{r read.active.df16.wt,echo=FALSE,cache=FALSE,eval=TRUE}
 dt<-fread(file=file.path('data',d,'fba_sobol_isactive.csv'))
 idx<-match(names(dt)[-c(1,ncol(dt))],df$varname)
+dtWT64<-dt
+names(dtWT64)<-sub('^EX_','actEX_',names(dtWT64))
+```
+
+```{r calc.active.df16.wt,echo=FALSE,cache=TRUE,eval=TRUE}
 df$PercActive16[idx]<-apply(as.data.frame(dt)[1:131072,-c(1,ncol(dt))],2,mean)
 df$NActive16[idx]<-apply(as.data.frame(dt)[1:131072,-c(1,ncol(dt))],2,sum)
 ```
-```{r read.active.df32.wt,echo=FALSE,cache=FALSE,eval=TRUE}
+```{r calc.active.df32.wt,echo=FALSE,cache=TRUE,eval=TRUE}
 df$PercActive32[idx]<-apply(as.data.frame(dt)[1:262144,-c(1,ncol(dt))],2,mean)
 df$NActive32[idx]<-apply(as.data.frame(dt)[1:262144,-c(1,ncol(dt))],2,sum)
 ```
 
-```{r read.active.df64.wt,echo=FALSE,cache=FALSE,eval=TRUE}
-dtWT64<-dt
-names(dtWT64)<-sub('^EX_','actEX_',names(dtWT64))
+```{r calc.active.df64.wt,echo=FALSE,cache=TRUE,eval=TRUE}
 df$PercActive64[idx]<-apply(as.data.frame(dt)[,-c(1,ncol(dt))],2,mean)
 df$NActive64[idx]<-apply(as.data.frame(dt)[,-c(1,ncol(dt))],2,sum)
 ```
@@ -997,14 +1000,14 @@ of this mutant model was created by removing reactions  *HISTLOX*, *HISTD*, and 
 ### Read data
 
 The following code loads simulation data:
-```{r read.rds.hisD,eval=TRUE,cache=FALSE}
+```{r read.rds.hisD,eval=TRUE,cache=TRUE}
 d<-"Escherichia_coli_str_K_12_substr_MG1655_ko_hisD"
 mdf<-fread(file=file.path('data',paste0(d,'.csv')))
 fr64<-fread(file.path('data',d,'flux_range_64.csv'))
 frdf<-fread(file = file.path('data',d,'prcc_64.csv'))
 ```
 
-```{r make.data.table.hisD,eval=TRUE,cache=FALSE}
+```{r make.data.table.hisD,eval=TRUE,cache=TRUE}
 df<-as.data.table(frdf)
 df$HMDF["['NaN']"==df$HMDF]<-""
 df$ChEBI["['NaN']"==df$ChEBI]<-""
@@ -1034,15 +1037,18 @@ dt<-fread(file=file.path('data',d,'fba_sobol_isactive.csv'))
 dtHisD64<-dt
 names(dtHisD64)<-sub('^EX_','actEX_',names(dtHisD64))
 idx<-match(names(dt)[-c(1,ncol(dt))],df$varname)
+```
+
+```{r calc.active.df16.hisD,echo=FALSE,cache=TRUE,eval=TRUE}
 df$PercActive16[idx]<-apply(as.data.frame(dt)[1:131072,-c(1,ncol(dt))],2,mean)
 df$NActive16[idx]<-apply(as.data.frame(dt)[1:131072,-c(1,ncol(dt))],2,sum)
 ```
-```{r read.active.df32.hisD,echo=FALSE,cache=FALSE,eval=TRUE}
+```{r calc.active.df32.hisD,echo=FALSE,cache=TRUE,eval=TRUE}
 df$PercActive32[idx]<-apply(as.data.frame(dt)[1:262144,-c(1,ncol(dt))],2,mean)
 df$NActive32[idx]<-apply(as.data.frame(dt)[1:262144,-c(1,ncol(dt))],2,sum)
 ```
 
-```{r read.active.df64.hisD,echo=FALSE,cache=FALSE,eval=TRUE}
+```{r calc.active.df64.hisD,echo=FALSE,cache=TRUE,eval=TRUE}
 df$PercActive64[idx]<-apply(as.data.frame(dt)[,-c(1,ncol(dt))],2,mean)
 df$NActive64[idx]<-apply(as.data.frame(dt)[,-c(1,ncol(dt))],2,sum)
 ```
@@ -1163,14 +1169,16 @@ printTable(repTbl10[order(pval,original)], digits = 5,
 ## Escherichia coli str. K12 substr. MG1655 ko hisD no AlaHis transport
 
 #### Read data
-```{r read.rds.hisD.noalahis,eval=TRUE,cache=FALSE}
+
+The following code loads simulation data:
+```{r read.rds.hisD.noalahis,eval=TRUE,cache=TRUE}
 d<-"Escherichia_coli_str_K_12_substr_MG1655_ko_hisD_block_alahis"
 mdf<-fread(file=file.path('data',paste0(d,'.csv')))
 fr64<-fread(file.path('data',d,'flux_range_64.csv'))
 frdf<-fread(file = file.path('data',d,'prcc_64.csv'))
 ```
 
-```{r make.data.table.hisD.noalahis,eval=TRUE,cache=FALSE}
+```{r make.data.table.hisD.noalahis,eval=TRUE,cache=TRUE}
 df<-as.data.table(frdf)
 df$HMDF["['NaN']"==df$HMDF]<-""
 df$ChEBI["['NaN']"==df$ChEBI]<-""
@@ -1201,15 +1209,19 @@ dt<-fread(file=file.path('data',d,'fba_sobol_isactive.csv'))
 dtHisD64_alahis<-dt
 names(dtHisD64_alahis)<-sub('^EX_','actEX_',names(dtHisD64_alahis))
 idx<-match(names(dt)[-c(1,ncol(dt))],df$varname)
+```
+
+
+```{r calc.active.df16.hisD.noalahis,echo=FALSE,cache=TRUE,eval=TRUE}
 df$PercActive16[idx]<-apply(as.data.frame(dt)[1:131072,-c(1,ncol(dt))],2,mean)
 df$NActive16[idx]<-apply(as.data.frame(dt)[1:131072,-c(1,ncol(dt))],2,sum)
 ```
-```{r read.active.df32.hisD.noalahis,echo=FALSE,cache=FALSE,eval=TRUE}
+```{r calc.active.df32.hisD.noalahis,echo=FALSE,cache=TRUE,eval=TRUE}
 df$PercActive32[idx]<-apply(as.data.frame(dt)[1:262144,-c(1,ncol(dt))],2,mean)
 df$NActive32[idx]<-apply(as.data.frame(dt)[1:262144,-c(1,ncol(dt))],2,sum)
 ```
 
-```{r read.active.df64.hisD.noalahis,echo=FALSE,cache=FALSE,eval=TRUE}
+```{r calc.active.df64.hisD.noalahis,echo=FALSE,cache=TRUE,eval=TRUE}
 df$PercActive64[idx]<-apply(as.data.frame(dt)[,-c(1,ncol(dt))],2,mean)
 df$NActive64[idx]<-apply(as.data.frame(dt)[,-c(1,ncol(dt))],2,sum)
 ```
@@ -1332,14 +1344,16 @@ printTable(repTbl10[order(pval,original)], digits = 5,
 ## Escherichia coli str. K12 substr. MG1655 ko trpB
 
 ### Read data
-```{r read.rds.trpB,eval=TRUE,cache=FALSE}
+
+The following code loads simulation data:
+```{r read.rds.trpB,eval=TRUE,cache=TRUE}
     d<-"Escherichia_coli_str_K_12_substr_MG1655_ko_trpB"
 mdf<-fread(file=file.path('data',paste0(d,'.csv')))
 fr64<-fread(file.path('data',d,'flux_range_64.csv'))
 frdf<-fread(file = file.path('data',d,'prcc_64.csv'))
 ```
 
-```{r make.data.table.trpB,eval=TRUE,cache=FALSE}
+```{r make.data.table.trpB,eval=TRUE,cache=TRUE}
 df<-as.data.table(frdf)
 df$HMDF["['NaN']"==df$HMDF]<-""
 df$ChEBI["['NaN']"==df$ChEBI]<-""
@@ -1369,15 +1383,18 @@ dt<-fread(file=file.path('data',d,'fba_sobol_isactive.csv'))
 dtTrpB64<-dt
 names(dtTrpB64)<-sub('^EX_','actEX_',names(dtTrpB64))
 idx<-match(names(dt)[-c(1,ncol(dt))],df$varname)
+```
+
+```{r calc.active.df16.trpB,echo=FALSE,cache=TRUE,eval=TRUE}
 df$PercActive16[idx]<-apply(as.data.frame(dt)[1:131072,-c(1,ncol(dt))],2,mean)
 df$NActive16[idx]<-apply(as.data.frame(dt)[1:131072,-c(1,ncol(dt))],2,sum)
 ```
-```{r read.active.df32.trpB,echo=FALSE,cache=FALSE,eval=TRUE}
+```{r calc.active.df32.trpB,echo=FALSE,cache=TRUE,eval=TRUE}
 df$PercActive32[idx]<-apply(as.data.frame(dt)[1:262144,-c(1,ncol(dt))],2,mean)
 df$NActive32[idx]<-apply(as.data.frame(dt)[1:262144,-c(1,ncol(dt))],2,sum)
 ```
 
-```{r read.active.df64.trpB,echo=FALSE,cache=FALSE,eval=TRUE}
+```{r calc.active.df64.trpB,echo=FALSE,cache=TRUE,eval=TRUE}
 df$PercActive64[idx]<-apply(as.data.frame(dt)[,-c(1,ncol(dt))],2,mean)
 df$NActive64[idx]<-apply(as.data.frame(dt)[,-c(1,ncol(dt))],2,sum)
 ```
