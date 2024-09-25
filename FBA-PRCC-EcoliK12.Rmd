@@ -10,6 +10,8 @@ output:
     extra_dependencies: ["flafter"]
   word_document: default
   html_document: default
+bibliography: FBA-PRCC-EcoliK12.bib
+csl: biomed-central.csl
 header-includes:
 - \usepackage[utf8]{inputenc}
 - \usepackage[english]{babel}
