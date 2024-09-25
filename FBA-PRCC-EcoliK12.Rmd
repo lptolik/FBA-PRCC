@@ -679,11 +679,11 @@ N1<-8192 * as.numeric(n1)
 N2<-8192 * as.numeric(n2)
 z<-(normPRCC(prcc1)-normPRCC(prcc2))/sqrt(1/(N1-3-p1) + 1/(N2-3-p2))
 pvalDif[[sprintf('fnm%02d',n2)]]<-data.frame(z=z,pval=pnorm(z),grp=sprintf('%06d-%06d',N1,N2),str='wt')
-sigUpset01[[sprintf('fnm%02d',n2)]]<-
+sigUpset01[[sprintf('fnm%06d',N2)]]<-
     lfdr[[sprintf('fnm%02d',n2)]]$varname[lfdr[[sprintf('fnm%02d',n2)]]$pval<=0.01]
-sigUpset05[[sprintf('fnm%02d',n2)]]<-
+sigUpset05[[sprintf('fnm%06d',N2)]]<-
     lfdr[[sprintf('fnm%02d',n2)]]$varname[lfdr[[sprintf('fnm%02d',n2)]]$pval<=0.05]
-sigUpset10[[sprintf('fnm%02d',n2)]]<-
+sigUpset10[[sprintf('fnm%06d',N2)]]<-
     lfdr[[sprintf('fnm%02d',n2)]]$varname[lfdr[[sprintf('fnm%02d',n2)]]$pval<=0.1]
 ```
 
@@ -703,11 +703,11 @@ N2<-8192 * n2
 z<-(normPRCC(prcc1)-normPRCC(prcc2))/sqrt(1/(N1-3-p1) + 1/(N2-3-p2))
 pvalDif[[sprintf('fnm%02d',n2)]]<-
     data.frame(z=z,pval=pnorm(z),grp=sprintf('%06d-%06d',N1,N2),str='wt')
-sigUpset01[[sprintf('fnm%02d',n2)]]<-
+sigUpset01[[sprintf('fnm%06d',N2)]]<-
     lfdr[[sprintf('fnm%02d',n2)]]$varname[lfdr[[sprintf('fnm%02d',n2)]]$pval<=0.01]
-sigUpset05[[sprintf('fnm%02d',n2)]]<-
+sigUpset05[[sprintf('fnm%06d',N2)]]<-
     lfdr[[sprintf('fnm%02d',n2)]]$varname[lfdr[[sprintf('fnm%02d',n2)]]$pval<=0.05]
-sigUpset10[[sprintf('fnm%02d',n2)]]<-
+sigUpset10[[sprintf('fnm%06d',N2)]]<-
     lfdr[[sprintf('fnm%02d',n2)]]$varname[lfdr[[sprintf('fnm%02d',n2)]]$pval<=0.1]
 ```
 
@@ -726,11 +726,11 @@ N1<-8192 * n1
 N2<-8192 * n2
 z<-(normPRCC(prcc1)-normPRCC(prcc2))/sqrt(1/(N1-3-p1) + 1/(N2-3-p2))
 pvalDif[[sprintf('fnm%02d',n2)]]<-data.frame(z=z,pval=pnorm(z),grp=sprintf('%06d-%06d',N1,N2),str='wt')
-sigUpset01[[sprintf('fnm%02d',n2)]]<-
+sigUpset01[[sprintf('fnm%06d',N2)]]<-
     lfdr[[sprintf('fnm%02d',n2)]]$varname[lfdr[[sprintf('fnm%02d',n2)]]$pval<=0.01]
-sigUpset05[[sprintf('fnm%02d',n2)]]<-
+sigUpset05[[sprintf('fnm%06d',N2)]]<-
     lfdr[[sprintf('fnm%02d',n2)]]$varname[lfdr[[sprintf('fnm%02d',n2)]]$pval<=0.05]
-sigUpset10[[sprintf('fnm%02d',n2)]]<-
+sigUpset10[[sprintf('fnm%06d',N2)]]<-
     lfdr[[sprintf('fnm%02d',n2)]]$varname[lfdr[[sprintf('fnm%02d',n2)]]$pval<=0.1]
 ```
 
