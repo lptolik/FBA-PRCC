@@ -401,8 +401,16 @@ ndf<-ndf[ndf$glbComp!=midx,]
 mndf<-ndf[ndf$Type=='metabolite',]
 rndf<-ndf[ndf$Type=='reaction'&!grepl('_rev$',ndf$name),]
 ```
+
+```{r prepare.palette,eval=TRUE,include=FALSE,echo=FALSE}
+p<-brewer.pal(8, 'Dark2')
+names(p)<-c('IDR',"OUT","",'TU','IN','SCC','ODR','OTR')
+```
+
+Figure \ref{fig:g_bowtie} visualize bow-tie decomposition with automatic 
+cluster-based layout.
 ```{r plot.global.graph.bowtie, fig.width=8,fig.height=8,fig.cap="\\label{fig:g_bowtie} Layout of the \\textit{E. coli} metabolic network according to its bow-tie decomposition."}
-ggnet2(g,mode=l,color='BowTie', color.palette = "Dark2")
+ggnet2(g,mode=l,color='BowTie', color.palette = p)
 ```
 
 ```{r all.graph.components.reaction.table,results='asis',cache=FALSE, echo=TRUE}
@@ -490,7 +498,7 @@ rndf<-ndf[ndf$Type=='reaction'&!grepl('_rev$',ndf$name),]
 ```
 
 ```{r plot.clean.graph.bowtie, fig.width=8,fig.height=8,fig.cap="\\label{fig:gc_bowtie} Layout of the \\textit{E. coli} metabolic network without currency metabolites according to its bow-tie decomposition."}
-ggnet2(gc,mode=l,color='BowTie', color.palette = "Dark2")
+ggnet2(gc,mode=l,color='BowTie', color.palette = p)
 ```
 
 ```{r clean.graph.components.reaction.table,results='asis',cache=FALSE,echo=TRUE}
