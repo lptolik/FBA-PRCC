@@ -1057,10 +1057,10 @@ df$NActive64[idx]<-apply(as.data.frame(dt)[,-c(1,ncol(dt))],2,sum)
 dfAll<-rbind(dfAll,df,fill=TRUE)
 dfw<-merge(dfw,df,by=mvar,all.x=TRUE,suffixes = c('.wt',''))
 ```
-```{r hist.plot.hisD,fig.width=8,fig.height=8,fig.cap="\\label{fig:hisD_prcc_pval} Distribution of the significance of the exchange reaction boundaries PRCC values for the hisD model."}
+```{r hist.plot.hisD,fig.width=8,fig.height=8,fig.cap="\\label{fig:hisD_prcc_pval} Distribution of the significance of the exchange reaction boundaries PRCC values for the $\\Delta hisD$ model."}
 qplot(df$pval,bins = 50)+
     xlab('p-value')+
-    ggtitle('Full dataset PRCC significance distribution for hisD')+
+    #ggtitle('Full dataset PRCC significance distribution for hisD')+
     theme_bw()
 ```
 
@@ -1084,21 +1084,21 @@ qplot(inBound_HisL,Solution,data = pltDFhis,color=activityInflux,log='x')+
     #ggtitle(bquote("Histidine influx boundary in "~Delta~"hisD mutant"))+
     theme_bw()
 ```
-```{r plot.hisD.bndvssol_facet,fig.format='png',fig.dpi=600,fig.cap="\\label{fig:hisD_his_bs_f} Influence of the histidine influx boundary on the biomass production in the hisD model. Sobol points where the boundary was active shown in red and placed on different panels."}
+```{r plot.hisD.bndvssol_facet,fig.format='png',fig.dpi=600,fig.cap="\\label{fig:hisD_his_bs_f} Influence of the histidine influx boundary on the biomass production in the $\\Delta hisD$ model. Sobol points where the boundary was active shown in red and placed on different panels."}
 qplot(inBound_HisL,Solution,data = pltDFhis,color=activityInflux,log='x',
       facets = activityInflux ~ .)+
     #ggtitle(bquote("Histidine influx boundary in "~Delta~"hisD mutant"))+
     theme_bw()
 ```
 
-```{r plot.hisD.bndvsinflux,fig.format='png',fig.dpi=600,fig.cap="\\label{fig:hisD_his_bf} Influence of the histidine influx boundary on the actual histidine influx value in the hisD model. Sobol points where the boundary was active shown in red."}
+```{r plot.hisD.bndvsinflux,fig.format='png',fig.dpi=600,fig.cap="\\label{fig:hisD_his_bf} Influence of the histidine influx boundary on the actual histidine influx value in the $\\Delta hisD$ model. Sobol points where the boundary was active shown in red."}
 qplot(inBound_HisL,influx_HisL,data = pltDFhis,color = activityInflux,
       log='x')+
     #ggtitle(bquote("Histidine influx in "~Delta~"hisD mutant"))+
     theme_bw()
 ```
 
-```{r plot.hisD.bndvsinflux_facet,fig.format='png',fig.dpi=600,fig.cap="\\label{fig:hisD_his_bf_f} Influence of the histidine influx boundary on the actual histidine influx value in the hisD model. Sobol points where the boundary was active shown in red and placed on different panels."}
+```{r plot.hisD.bndvsinflux_facet,fig.format='png',fig.dpi=600,fig.cap="\\label{fig:hisD_his_bf_f} Influence of the histidine influx boundary on the actual histidine influx value in the $\\Delta hisD$ model. Sobol points where the boundary was active shown in red and placed on different panels."}
 qplot(inBound_HisL,influx_HisL,data = pltDFhis,color = activityInflux,log='x',
       facets = activityInflux ~ .)+
     #ggtitle(bquote("Histidine influx in "~Delta~"hisD mutant"))+
@@ -1259,11 +1259,11 @@ dfw<-merge(dfw,df,by=mvar,all.x=TRUE,suffixes = c('.hisD',''))
 ```
 
 
-```{r hist.plot.hisD.noalahis,fig.width=8,fig.height=8,fig.cap="\\label{fig:alahis_prcc_pval} Distribution of the significance of the exchange reaction boundaries PRCC values for the hisD model with blocked assimilation of the AlaHis dipeptide."}
+```{r hist.plot.hisD.noalahis,fig.width=8,fig.height=8,fig.cap="\\label{fig:alahis_prcc_pval} Distribution of the significance of the exchange reaction boundaries PRCC values for the $\\Delta hisD$ model with blocked assimilation of the AlaHis dipeptide."}
 qplot(df$pval)+
     xlab('p-value')+
-    theme_bw()+
-    ggtitle('Full dataset PRCC significance distribution for hisD with AlaHis blocked')
+    theme_bw()#+
+    #ggtitle('Full dataset PRCC significance distribution for hisD with AlaHis blocked')
 ```
 
 ### Histidine flux plots
@@ -1287,25 +1287,25 @@ pltDFhis<-data.frame(Solution=fluxes_hisD_alahis$Solution,
                   activityOutflux=factor(dtHisD64_alahis$`actEX_his_L(e)_u`,levels = c(1,0),labels = c('active','inactive')))
 
 ```
-```{r plot.hisD.noalahis.bndvssol,fig.format='png',fig.dpi=600,fig.cap="\\label{fig:hisD2_his_bs} Influence of the histidine influx boundary on the biomass production in the hisD model with blocked AlaHis assimilation. Sobol points where the boundary was active shown in red."}
+```{r plot.hisD.noalahis.bndvssol,fig.format='png',fig.dpi=600,fig.cap="\\label{fig:hisD2_his_bs} Influence of the histidine influx boundary on the biomass production in the $\\Delta hisD$ model with blocked AlaHis assimilation. Sobol points where the boundary was active shown in red."}
 qplot(inBound_HisL,Solution,data = pltDFhis,color=activityInflux,log='x')+
     #ggtitle(bquote("Histidine influx boundary in "~Delta~"hisD mutant"))+
     theme_bw()
 ```
-```{r plot.hisD.noalahis.bndvssol.facet,fig.format='png',fig.dpi=600,fig.cap="\\label{fig:hisD2_his_bs_f} Influence of the histidine influx boundary on the biomass production in the hisD model with blocked AlaHis assimilation. Sobol points where the boundary was active shown in red and placed on different panels."}
+```{r plot.hisD.noalahis.bndvssol.facet,fig.format='png',fig.dpi=600,fig.cap="\\label{fig:hisD2_his_bs_f} Influence of the histidine influx boundary on the biomass production in the $\\Delta hisD$ model with blocked AlaHis assimilation. Sobol points where the boundary was active shown in red and placed on different panels."}
 qplot(inBound_HisL,Solution,data = pltDFhis,color=activityInflux,log='x',
       facets = activityInflux ~ .)+
     #ggtitle(bquote("Histidine influx boundary in "~Delta~"hisD mutant"))+
     theme_bw()
 ```
 
-```{r plot.hisD.noalahis.bndvsinflux,fig.format='png',fig.dpi=600,fig.cap="\\label{fig:hisD2_his_bf} Influence of the histidine influx boundary on the actual histidine influx value in the hisD model with blocked AlaHis assimilation. Sobol points where the boundary was active shown in red."}
+```{r plot.hisD.noalahis.bndvsinflux,fig.format='png',fig.dpi=600,fig.cap="\\label{fig:hisD2_his_bf} Influence of the histidine influx boundary on the actual histidine influx value in the $\\Delta hisD$ model with blocked AlaHis assimilation. Sobol points where the boundary was active shown in red."}
 qplot(inBound_HisL,influx_HisL,data = pltDFhis,color = activityInflux,log='x')+
     #ggtitle(bquote("Histidine influx in "~Delta~"hisD mutant"))+
     theme_bw()
 ```
 
-```{r plot.hisD.noalahis.bndvsinflux_facet,fig.format='png',fig.dpi=600,fig.cap="\\label{fig:hisD2_his_bf_f} Influence of the histidine influx boundary on the actual histidine influx value in the hisD model with blocked AlaHis assimilation. Sobol points where the boundary was active shown in red and placed on different panels."}
+```{r plot.hisD.noalahis.bndvsinflux_facet,fig.format='png',fig.dpi=600,fig.cap="\\label{fig:hisD2_his_bf_f} Influence of the histidine influx boundary on the actual histidine influx value in the $\\Delta hisD$ model with blocked AlaHis assimilation. Sobol points where the boundary was active shown in red and placed on different panels."}
 qplot(inBound_HisL,influx_HisL,data = pltDFhis,color = activityInflux,log='x',
       facets = activityInflux ~ .)+
     #ggtitle(bquote("Histidine influx in "~Delta~"hisD mutant"))+
@@ -1349,7 +1349,9 @@ subTbl10<-subTbl[(pval<=0.1)]
 ```{r substr10.met.car.table.hisD.noalahis,results='asis',cache=FALSE}
 printTable(subTbl10[order(pval,-1*original)], digits = 5,
            main = 'hisD substrates',
-           landscape = TRUE,align = 'llllll',#align = alEdgesOne,
+           landscape = TRUE,
+           #align = 'llllll',
+           align = alEdgesOne,
            label = 'tab:SubsHisDnoalahis10')
 ```
 
@@ -1362,7 +1364,9 @@ prdTbl10<-prdTbl[(pval<=0.1)]
 ```{r prd10.met.car.table.hisD.noalahis,results='asis',cache=FALSE}
 printTable(prdTbl10[order(pval,-1*original)], digits = 5,
            main = 'hisD products',
-           landscape = TRUE,align = 'llllll',#align = alEdgesOne,
+           landscape = TRUE,
+           #align = 'llllll',
+           align = alEdgesOne,
            label = 'tab:ProdsHisDnoalahis10')
 ```
 
@@ -1375,7 +1379,9 @@ attrTbl10<-attrTbl[(pval<=0.1)]
 ```{r attr10.met.car.table.hisD.noalahis,results='asis',cache=FALSE}
 printTable(attrTbl10[order(pval,original)], digits = 5,
            main = 'hisD attractants',
-           landscape = TRUE,align = 'llllll',#align = alEdgesOne,
+           landscape = TRUE,
+           #align = 'llllll',
+           align = alEdgesOne,
            label = 'tab:AttrsHisDnoalahis10')
 ```
 
@@ -1388,7 +1394,9 @@ repTbl10<-repTbl[(pval<=0.1)]
 ```{r rep10.met.car.table.hisD.noalahis,results='asis',cache=FALSE}
 printTable(repTbl10[order(pval,original)], digits = 5,
            main = 'hisD repellents',
-           landscape = TRUE,align = 'llllll',#align = alEdgesOne,
+           landscape = TRUE,
+           #align = 'llllll',#
+           align = alEdgesOne,
            label = 'tab:RepsHisDnoalahis10')
 ```
 
@@ -1466,10 +1474,10 @@ df$NActive64[idx]<-apply(as.data.frame(dt)[,-c(1,ncol(dt))],2,sum)
 dfAll<-rbind(dfAll,df,fill=TRUE )
 dfw<-merge(dfw,df,by=mvar,all.x=TRUE,suffixes = c('.hisD2','.trpB'))
 ```
-```{r hist.plot.trpB,fig.width=8,fig.height=8,fig.cap="\\label{fig:trpB_prcc_pval} Distribution of the significance of the exchange reaction boundaries PRCC values for the trpB model."}
+```{r hist.plot.trpB,fig.width=8,fig.height=8,fig.cap="\\label{fig:trpB_prcc_pval} Distribution of the significance of the exchange reaction boundaries PRCC values for the $\\Delta trpB$ model."}
 qplot(df$pval,bins = 50)+
     xlab('p-value')+
-    ggtitle('Full dataset PRCC significance distribution for trpB')+
+    #ggtitle('Full dataset PRCC significance distribution for trpB')+
     theme_bw()
 ```
 
@@ -1492,26 +1500,26 @@ pltDFtrp<-data.frame(Solution=fluxes_trpB$Solution,
                   activityOutflux=factor(dtTrpB64$`actEX_trp_L(e)_u`,levels = c(1,0),labels = c('active','inactive')))
 ```
 
-```{r plot.trpB.bndvssol,fig.format='png',fig.dpi=600,fig.cap="\\label{fig:trpB_trp_bs} Influence of the tryptophan influx boundary on the biomass production in the trpB model. Sobol points where the boundary was active shown in red."}
+```{r plot.trpB.bndvssol,fig.format='png',fig.dpi=600,fig.cap="\\label{fig:trpB_trp_bs} Influence of the tryptophan influx boundary on the biomass production in the $\\Delta trpB$ model. Sobol points where the boundary was active shown in red."}
 qplot(inBound_TrpL,Solution,data = pltDFtrp,color=activityInflux,log='x')+
     #ggtitle(bquote("Tryptophan influx boundary in "~Delta~"trpB mutant"))+
     theme_bw()
 ```
 
-```{r plot.trpB.bndvssol_facet,fig.format='png',fig.dpi=600,fig.cap="\\label{fig:trpB_trp_bs_f} Influence of the tryptophan influx boundary on the biomass production in the trpB model. Sobol points where the boundary was active shown in red and placed on different panels."}
+```{r plot.trpB.bndvssol_facet,fig.format='png',fig.dpi=600,fig.cap="\\label{fig:trpB_trp_bs_f} Influence of the tryptophan influx boundary on the biomass production in the $\\Delta trpB$ model. Sobol points where the boundary was active shown in red and placed on different panels."}
 qplot(inBound_TrpL,Solution,data = pltDFtrp,color=activityInflux,log='x',
       facets = activityInflux ~ .)+
     #ggtitle(bquote("Tryptophan influx boundary in "~Delta~"trpB mutant"))+
     theme_bw()
 ```
 
-```{r plot.trpB.bndvsinflux,fig.format='png',fig.dpi=600,fig.cap="\\label{fig:trpB_trp_bf} Influence of the tryptophan influx boundary on the actual tryptophan influx value in the trpB model. Sobol points where the boundary was active shown in red."}
+```{r plot.trpB.bndvsinflux,fig.format='png',fig.dpi=600,fig.cap="\\label{fig:trpB_trp_bf} Influence of the tryptophan influx boundary on the actual tryptophan influx value in the $\\Delta trpB$ model. Sobol points where the boundary was active shown in red."}
 qplot(inBound_TrpL,influx_TrpL,data = pltDFtrp,color = activityInflux,log='x')+
     #ggtitle(bquote("Tryptophan influx in "~Delta~"trpB mutant"))+
     theme_bw()
 ```
 
-```{r plot.trpB.bndvsinflux.facet,fig.format='png',fig.dpi=600,fig.cap="\\label{fig:trpB_trp_bf_f} Influence of the tryptophan influx boundary on the actual tryptophan influx value in the trpB model. Sobol points where the boundary was active shown in red and placed on different panels."}
+```{r plot.trpB.bndvsinflux.facet,fig.format='png',fig.dpi=600,fig.cap="\\label{fig:trpB_trp_bf_f} Influence of the tryptophan influx boundary on the actual tryptophan influx value in the $\\Delta trpB$ model. Sobol points where the boundary was active shown in red and placed on different panels."}
 qplot(inBound_TrpL,influx_TrpL,data = pltDFtrp,color = activityInflux,log='x',
       facets = activityInflux ~ .)+
     #ggtitle(bquote("Tryptophan influx in "~Delta~"trpB mutant"))+
