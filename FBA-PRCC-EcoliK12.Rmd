@@ -826,7 +826,7 @@ upset(fromList(sigUpset10),nsets = length(sigUpset10))
 ### Histidine and tryptophan flux plots
 
 We going to compare sensitivity profile of the wild-type model with two auxotrophic
-mutants $\Delta$hisD and $\Delta$trpB, which are unable to prodice internally
+mutants $\Delta hisD$ and $\Delta trpB$, which are unable to prodice internally
 histidine and tryptophan correspondently. 
 
 Supplementary Figures \ref{fig:wt_his_bs}, \ref{fig:wt_his_bs_f}, \ref{fig:wt_his_bf}, and \ref{fig:wt_his_bf_f} demonstrate how histidine influx bound value influences
@@ -871,8 +871,8 @@ qplot(inBound_HisL,influx_HisL,data = pltDFwt,color = activityInflux,log='x',
     theme_bw()
 ```
 
-Supplementary Figures \ref{fig:wt_trp_bs}, \ref{fig:wt_trp_bs_f}, \ref{fig:wt_trp_bf}, and \ref{fig:wt_trp_bf_f} demonstrate how histidine influx bound value influences
-histidine influx itself and biomass production.
+Supplementary Figures \ref{fig:wt_trp_bs}, \ref{fig:wt_trp_bs_f}, \ref{fig:wt_trp_bf}, and \ref{fig:wt_trp_bf_f} demonstrate how tryptophan influx bound value influences
+tryptophan influx itself and biomass production.
 
 ```{r prepare.wt.trpB.plot.dataset}
 re_names<-c("EX_trp_L(e)", "TRPAS2i", "TRPTA", "TRP_Ltex", "TRPt2rpp")
@@ -989,7 +989,7 @@ printTable(repTbl10[order(pval,original)], digits = 5,
 
 ## Escherichia coli str. K12 substr. MG1655 ko hisD
 
-Auxotrophic mutant Escherichia coli str. K12 substr. MG1655 $\Delta$hisD was 
+Auxotrophic mutant Escherichia coli str. K12 substr. MG1655 $\Delta hisD$ was 
 created by knocking out hisD gene, which encodes **Histidinol dehydrogenase**. 
 This enzyme controls the last step of the *de novo* histidine biosynthesis. 
 The original AGORA2 model has discrepancy in gene annotation of the *de novo* 
@@ -1109,10 +1109,25 @@ qplot(inBound_HisL,influx_HisL,data = pltDFhis,color = activityInflux,log='x',
 
 ### Interaction type table
 
+We group all significantly sensitive exchange reaction boundary values and 
+corresponding metabolites into four groups according to the type of boundary 
+(upper or lower) and sign of the significance coefficient (PRCC). Number of
+reactions in each group for $\Delta hisD$ is shown in the Supplementary Table \ref{tab:hisD_int_fq}.
+
+Metabolites, which exchange reaction lower or upper boundary has positive sensitivity coefficient, 
+we will call substrates and products correspondingly. Substrates and products for the
+$\Delta hisD$ model shown in Supplementary Tables \ref{tab:SubsHisD10} and \ref{tab:ProdsHisD10}.
+
+Metabolites, which exchange reaction lower or upper boundary has negative sensitivity coefficient, 
+we will call repellents and attractants correspondingly. Repellents and attractants for the
+$\Delta hisD$ model shown in Supplementary Tables \ref{tab:RepsHisD10} and \ref{tab:AttrsHisD10}.
+
+
 ```{r interaction.types.hisD}
 prnTbl<-df[(card>1),c(1:3,6,31,32,34,36,8)]
 prnTbl10<-prnTbl[(pval<=0.1)]
-pander(table(sign(prnTbl10$original),sub('.+_(.+)$','\\1',prnTbl10$varname)))
+pander(table(sign(prnTbl10$original),sub('.+_(.+)$','\\1',prnTbl10$varname)),
+       caption = '\\label{tab:hisD_int_fq} Sign/bound frequency table for $\\Delta hisD$ model')
 ```
 
 #### Substrate table
@@ -1168,6 +1183,16 @@ printTable(repTbl10[order(pval,original)], digits = 5,
 ```
 
 ## Escherichia coli str. K12 substr. MG1655 ko hisD no AlaHis transport
+
+Analysis of the simulation results of $\Delta hisD$ model demonstrate unexpected
+results: model apeears to be insensitive to the histidine influx. Detailed analysis
+of the model structure reveals that histidine could be provided not only as pure
+amino acid, but also as dipeptide AlaHis. To exclude influence of the dipeptide from
+analysis new model was created by removing the reaction *ALAHIStex* to prevent
+AlaHis assimilation. The same result could be obtained by removing exchange reaction
+*EX_alahis(e)*, but that would change the dimensionality of the parameter space 
+that sampled by the Sobol points. This change will make impossible to compare
+flux distributions between this model and other variants. 
 
 #### Read data
 
@@ -1242,6 +1267,14 @@ qplot(df$pval)+
 ```
 
 ### Histidine flux plots
+
+Similar to Supplementary Figures \ref{fig:wt_his_bs}, \ref{fig:wt_his_bs_f}, 
+\ref{fig:wt_his_bf}, and \ref{fig:wt_his_bf_f}, which show influence of the 
+histidine influx on the wild-type model, Supplementary Figures \ref{fig:hisD2_his_bs}, 
+\ref{fig:hisD2_his_bs_f}, \ref{fig:hisD2_his_bf}, and \ref{fig:hisD2_his_bf_f} 
+show influence of the histidine influx on the $\Delta hisD$ model  with 
+blocked AlaHis assimilation.
+
 ```{r prepare.hisD.noalahis.plot.dataset}
 fluxes_hisD_alahis<-fread(file=file.path('data',d,'mutant_related_fluxes.csv'))
 re_names<-c("ALAHIS1c", "EX_his_L(e)", "HISCAT1pp", "HIS_Ltex", "HISabcpp", "HISt2pp")
@@ -1283,11 +1316,28 @@ qplot(inBound_HisL,influx_HisL,data = pltDFhis,color = activityInflux,log='x',
 
 ### Interaction type table
 
+We group all significantly sensitive exchange reaction boundary values and 
+corresponding metabolites into four groups according to the type of boundary 
+(upper or lower) and sign of the significance coefficient (PRCC). Number of
+reactions in each group for $\Delta hisD$ is shown in the Supplementary Table \ref{tab:hisD2_int_fq}.
+
+Metabolites, which exchange reaction lower or upper boundary has positive sensitivity coefficient, 
+we will call substrates and products correspondingly. Substrates and products for the
+$\Delta hisD$ model shown in Supplementary Tables \ref{tab:SubsHisDnoalahis10} 
+and \ref{tab:ProdsHisDnoalahis10}.
+
+Metabolites, which exchange reaction lower or upper boundary has negative sensitivity coefficient, 
+we will call repellents and attractants correspondingly. Repellents and attractants for the
+$\Delta hisD$ model shown in Supplementary Tables \ref{tab:RepsHisDnoalahis10} 
+and \ref{tab:AttrsHisDnoalahis10}.
+
+
 ```{r interaction.types.hisD.noalahis}
-#prnTbl<-df[(card>1),c(1:3,6,31,32,34,36,8)]
-prnTbl<-df[(card>1),c(1:3,6,8)]
+prnTbl<-df[(card>1),c(1:3,6,31,32,34,36,8)]
+#prnTbl<-df[(card>1),c(1:3,6,8)]
 prnTbl10<-prnTbl[(pval<=0.1)]
-pander(table(sign(prnTbl10$original),sub('.+_(.+)$','\\1',prnTbl10$varname)))
+pander(table(sign(prnTbl10$original),sub('.+_(.+)$','\\1',prnTbl10$varname)),
+       caption = '\\label{tab:hisD2_int_fq} Sign/bound frequency table for $\\Delta hisD$ model with blocked AlaHis assimilation.')
 ```
 
 #### Substrate table
@@ -1344,6 +1394,16 @@ printTable(repTbl10[order(pval,original)], digits = 5,
 
 
 ## Escherichia coli str. K12 substr. MG1655 ko trpB
+
+Metabolic model of auxotrophic mutant $\Delta trpB$ was created by knocking out
+Tryptophan synthase beta chain gene *trpB*, which suppose to control three 
+reactions *TRPS1*, *TRPS2*, and *TRPS3*. However in the wild-type model 
+*Escherichia_coli_str_K_12_substr_MG1655* genes seems to be duplicated: TRPS1 
+is controlled by two genes *511145.12.1311_11.peg* and *511145.12.1310_10.peg*, 
+while TRPS2 and TRPS3 are controlled by another two genes *511145.12.peg.1311* 
+and *511145.12.peg.1310*. And the second set of genes could be found on PATRIC, 
+while search for the first two genes gives no results. So the actual model was
+created by removing three reactions *TRPS1*, *TRPS2*, and *TRPS3*.
 
 ### Read data
 
@@ -1415,7 +1475,10 @@ qplot(df$pval,bins = 50)+
 
 ### Tryptophan flux plots
 
-Similar to Supplementary Figures \ref{fig:wt_trp_bs}, \ref{fig:wt_trp_bs_f}, \ref{fig:wt_trp_bf}, and \ref{fig:wt_trp_bf_f}, which show influence of the tryptophan influx on the wild-type model, Supplementary Figures \ref{fig:trpB_trp_bs}, \ref{fig:trpB_trp_bs_f}, \ref{fig:trpB_trp_bf}, and \ref{fig:trpB_trp_bf_f} show influence of the tryptophan influx on the $\Delta trpB$ model.
+Similar to Supplementary Figures \ref{fig:wt_trp_bs}, \ref{fig:wt_trp_bs_f}, 
+\ref{fig:wt_trp_bf}, and \ref{fig:wt_trp_bf_f}, which show influence of the 
+tryptophan influx on the wild-type model, Supplementary Figures \ref{fig:trpB_trp_bs}, \ref{fig:trpB_trp_bs_f}, \ref{fig:trpB_trp_bf}, and \ref{fig:trpB_trp_bf_f} 
+show influence of the tryptophan influx on the $\Delta trpB$ model.
 
 ```{r prepare.trpB.plot.dataset}
 fluxes_trpB<-fread(file=file.path('data',d,'mutant_related_fluxes.csv'))
@@ -1457,10 +1520,24 @@ qplot(inBound_TrpL,influx_TrpL,data = pltDFtrp,color = activityInflux,log='x',
 
 ### Interaction type table
 
+We group all significantly sensitive exchange reaction boundary values and 
+corresponding metabolites into four groups according to the type of boundary 
+(upper or lower) and sign of the significance coefficient (PRCC). Number of
+reactions in each group for $\Delta trpB$ is shown in the Supplementary Table \ref{tab:trpB_int_fq}.
+
+Metabolites, which exchange reaction lower or upper boundary has positive sensitivity coefficient, 
+we will call substrates and products correspondingly. Substrates and products for the
+$\Delta trpB$ model shown in Supplementary Tables \ref{tab:SubsTrpB10} and \ref{tab:ProdsTrpB10}.
+
+Metabolites, which exchange reaction lower or upper boundary has negative sensitivity coefficient, 
+we will call repellents and attractants correspondingly. Repellents and attractants for the
+$\Delta trpB$ model shown in Supplementary Tables \ref{tab:RepsTrpB10} and \ref{tab:AttrsTrpB10}.
+
 ```{r interaction.types.trpB}
 prnTbl<-df[(card>1),c(1:3,6,31,32,34,36,8)]
 prnTbl10<-prnTbl[(pval<=0.1)]
-pander(table(sign(prnTbl10$original),sub('.+_(.+)$','\\1',prnTbl10$varname)))
+pander(table(sign(prnTbl10$original),sub('.+_(.+)$','\\1',prnTbl10$varname)),
+       caption = '\\label{tab:trpB_int_fq} Sign/bound frequency table for $\\Delta trpB$ model')
 ```
 
 #### Substrate table
