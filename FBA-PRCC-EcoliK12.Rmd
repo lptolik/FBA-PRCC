@@ -312,55 +312,21 @@ mvar<-c("MetID","varname","Name","ExEquation","HMDF","ChEBI","InChI","SMILES","K
 ## Escherichia coli str. K12 substr. MG1655
 
 ### Read data
-We have calculated PRCC coefficients for all exchange reactions for the 
-metabolic model of *Escherichia coli str. K12 substr. MG1655* taken from the
+We have calculated PRCC coefficients with different number of Sobol points 
+for all exchange reactions for the metabolic model of 
+*Escherichia coli str. K12 substr. MG1655* taken from the
 AGORA2 collection [@Heinken:2023Genomescale]. The following code loads that data:
 
 ```{r read.rds.wt,eval=TRUE,cache=TRUE}
 d<-"Escherichia_coli_str_K_12_substr_MG1655"
 mdf<-fread(file=file.path('data',paste0(d,'.csv')))
-    fr64<-fread(file.path('data',d,'flux_range_64.csv'))[,-1]
-    lfdr<-list()
-    for(fnum in fnums){
-                frdf<-fread(file = file.path('data',d,paste0('prcc_',fnum,'.csv')))
-        lfdr[[sprintf('fnm%02d',fnum)]]<-frdf
-    }
-frdf<-lfdr$fnm64#do.call(rbind,lfdr)
-```
-
-```{r make.data.table.wt,eval=TRUE,cache=TRUE}
-df<-as.data.table(frdf)
-df$HMDF["['NaN']"==df$HMDF]<-""
-df$ChEBI["['NaN']"==df$ChEBI]<-""
-df$InChI["['NaN']"==df$InChI]<-""
-df$KEGG["['NaN']"==df$KEGG]<-""
-df$SEED["['NaN']"==df$SEED]<-""
-df$BiGG["['NaN']"==df$BiGG]<-""
-df$LipidMaps["['NaN']"==df$LipidMaps]<-""
-df$MetaNetX["['NaN']"==df$MetaNetX]<-""
-df$Reactome["['NaN']"==df$Reactome]<-""
-df$PubChem["['NaN']"==df$PubChem]<-""
-df$HMDF[is.na(df$HMDF)]<-""
-df$ChEBI[is.na(df$ChEBI)]<-""
-df$InChI[is.na(df$InChI)]<-""
-df$KEGG[is.na(df$KEGG)]<-""
-df$SEED[is.na(df$SEED)]<-""
-df$BiGG[is.na(df$BiGG)]<-""
-df$LipidMaps[is.na(df$LipidMaps)]<-""
-df$MetaNetX[is.na(df$MetaNetX)]<-""
-df$Reactome[is.na(df$Reactome)]<-""
-df$PubChem[is.na(df$PubChem)]<-""
-df$HMDF <- gsub("(\\[|\\]|')",'',df$HMDF)
-df$ChEBI <- gsub("(\\[|\\]|')",'',df$ChEBI)
-df$InChI <- gsub("(\\[|\\]|')",'',df$InChI)
-df$KEGG <- gsub("(\\[|\\]|')",'',df$KEGG)
-df$SEED <- gsub("(\\[|\\]|')",'',df$SEED)
-df$BiGG <- gsub("(\\[|\\]|')",'',df$BiGG)
-df$LipidMaps <- gsub("(\\[|\\]|')",'',df$LipidMaps)
-df$MetaNetX <- gsub("(\\[|\\]|')",'',df$MetaNetX)
-df$Reactome <- gsub("(\\[|\\]|')",'',df$Reactome)
-df$PubChem <- gsub("(\\[|\\]|')",'',df$PubChem)
-df$MicrobeID <- 'wt'
+fr64<-fread(file.path('data',d,'flux_range_64.csv'))[,-1]
+lfdr<-list()
+for(fnum in fnums){
+    frdf<-fread(file = file.path('data',d,paste0('prcc_',fnum,'.csv')))
+    lfdr[[sprintf('fnm%02d',fnum)]]<-frdf
+}
+df<-as.data.table(lfdr$fnm64)
 ```
 
 ```{r read.active.df16.wt,echo=FALSE,cache=FALSE,eval=TRUE}
@@ -393,7 +359,7 @@ dfw<-as.data.table(tmp)
 ### Estimate number of the Sobol point for PRCC value calculations
 As was mentioned in [@Marino:2008methodology] we first need to check what number
 of Sobol points is sufficient for reliable estimation of the PRCC values in the
-space of as much as `r nrow(frdf)` dimensions. To do this we will calculate
+space of as much as `r nrow(df)` dimensions. To do this we will calculate
 Top-Down Concordance Coefficients (TDCC) between PRCC values calculated with different 
 number of Sobol points and check how that value changes with that number. To make
 graphs comparable we always keep the same difference in number of Sobol point used 
@@ -522,11 +488,12 @@ printTable(tdccdf[,c('N','kendall','pearson')],
            landscape = FALSE,align = 'lrrr',include.rownames = TRUE,label = 'tab:TDCC')
 ```
 
-Another method to estimate number of Sobol points sufficient for the reliable PRCC value estimation, proposed in [@Marino:2008methodology] is to calculate statistical significance 
-of PRCC values calculated with different number of Sobol points. Supplementary 
-Figures \ref{fig:pval_trend} and \ref{fig:lpval_trend} shows how significance 
-values changes with number of Sobol point. That data support our choice of the
+Another method to estimate the number of Sobol points sufficient for the reliable PRCC value estimation, proposed in [@Marino:2008methodology] is to calculate the statistical significance 
+of PRCC values calculated with different numbers of Sobol points. Supplementary 
+Figures \ref{fig:pval_trend} and \ref{fig:lpval_trend} show how significance 
+values change with the number of Sobol points. That data supports our choice of the
 Sobol points number.
+
 ```{r pval.diff.plot, fig.width=8,fig.height=8,fig.cap="\\label{fig:pval_trend} Probability that difference of PRCC coefficients is random vs. number of Sobol points."}
 pvalDF<-do.call(rbind,pvalDif)
 p<-ggplot(pvalDF,aes(x=grp,y=pval))+geom_boxplot()+theme_bw()
@@ -537,11 +504,11 @@ print(p)
 p+scale_y_log10()+theme_bw()
 ```
 
-Another parameter required for the following analysis is the p-value, which separate
+Another parameter required for the following analysis is the p-value, which separates
 significant PRCC values from PRCC values indistinguishable from zero. Supplementary
 Figure \ref{fig:wt_prcc_pval} shows how PRCC significance is distributed. It could be
 seen that distribution is bimodal with values grouped around zero and above 0.5.
-According to this plot majority of PRCC values are not distinguishable from zero.
+According to this plot, the majority of PRCC values are not distinguishable from zero.
 
 ```{r hist.plot.wt,fig.width=8,fig.height=8,fig.cap="\\label{fig:wt_prcc_pval} Distribution of the significance of the exchange reaction boundaries PRCC values for the wild-type model."}
 qplot(df$pval,bins = 50)+
@@ -550,13 +517,14 @@ qplot(df$pval,bins = 50)+
     theme_bw()
 ```
 
-To choose p-value threshold we compare sets of significant exchange reaction calculated with different
-number of Sobol points. Supplementary Figures \ref{fig:upset01}, \ref{fig:upset05},
-and \ref{fig:upset10} shows UpSet plots of intersection of exchange reaction sets
-significant at the p-values 1%, 5%, and 10% correspondingly. It could be seen
-that majority of sensitive reaction bounds are identified in all sizes of the 
-data, and because larges numbers of the bounds found at p-value 10% we will use 
-this value in the following analysis.
+To choose the p-value threshold we compare sets of significant exchange reactions 
+calculated with different numbers of Sobol points. Supplementary Figures 
+\ref{fig:upset01}, \ref{fig:upset05}, and \ref{fig:upset10} show UpSet plots 
+[@Lex:2014UpSet; @Conway:2017UpSetR] of 
+intersection of exchange reaction sets significant at the p-values 1%, 5%, and 
+10% correspondingly. It could be seen that the majority of sensitive reaction bounds 
+are identified in all sizes of the data, and because large numbers of the bounds 
+were found at p-value of 10% we will use this value in the following analysis.
 
 ```{r sig01.upset.plot, fig.width=8,fig.height=8,fig.cap="\\label{fig:upset01} Intersection of sets of fluxes, for which PRCC different from zero at the significance level of 1%, obtained with different number of Sobol points."}
 upset(fromList(sigUpset01),nsets = length(sigUpset01))
@@ -570,48 +538,86 @@ upset(fromList(sigUpset10),nsets = length(sigUpset10))
 
 ### Histidine and tryptophan flux plots
 
-We going to compare sensitivity profile of the wild-type model with two auxotrophic
-mutants $\Delta hisD$ and $\Delta trpB$, which are unable to prodice internally
+We are going to compare the sensitivity profile of the wild-type model with two auxotrophic
+mutants $\Delta hisD$ and $\Delta trpB$, which are unable to produce internally
 histidine and tryptophan correspondently. 
 
 Supplementary Figures \ref{fig:wt_his_bs}, \ref{fig:wt_his_bs_f}, \ref{fig:wt_his_bf}, and \ref{fig:wt_his_bf_f} demonstrate how histidine influx bound value influences
 histidine influx itself and biomass production.
+
 ```{r read.wt.flux.plot.dataset}
 fluxes_WT<-fread(file=file.path('data',d,'mutant_related_fluxes.csv'))
 ```
 ```{r prepare.wt.his.plot.dataset}
 re_names<-c("ALAHIS1c", "EX_his_L(e)", "HISCAT1pp", "HIS_Ltex", "HISabcpp", "HISt2pp","EX_alahis(e)")
 hisL<-fluxes_WT[,match(paste0(re_names,'_fl'),names(fluxes_WT)),with=FALSE]
-pltDFwt<-data.frame(Solution=fluxes_WT$Solution,
-                  influx_HisL=abs(hisL$`EX_his_L(e)_fl`),
-                  inBound_HisL=fluxes_WT$`EX_his_L(e)_l`,
-                  outBound_HisL=fluxes_WT$`EX_his_L(e)_u`,
-                  activityInflux=factor(dtWT64$`actEX_his_L(e)_l`,levels = c(1,0),labels = c('active','inactive')),
-                  activityOutflux=factor(dtWT64$`actEX_his_L(e)_u`,levels = c(1,0),labels = c('active','inactive')))
+pltDFwtHis<-data.frame(Solution=fluxes_WT$Solution,
+                  influx_HisL=-1*(hisL$`EX_his_L(e)_fl`),
+                  inBound_HisL=1000*fluxes_WT$`EX_his_L(e)_l`,
+                  outBound_HisL=1000*fluxes_WT$`EX_his_L(e)_u`,
+                  activityInflux_HisL=factor(dtWT64$`actEX_his_L(e)_l`,
+                                        levels = c(1,0),labels = c('active','inactive')),
+                  activityOutflux_HisL=factor(dtWT64$`actEX_his_L(e)_u`,
+                                         levels = c(1,0),labels = c('active','inactive')),
+                  influx_AlaHis=-1*(hisL$`EX_alahis(e)_fl`),
+                  inBound_AlaHis=1000*fluxes_WT$`EX_alahis(e)_l`,
+                  outBound_AlaHis=1000*fluxes_WT$`EX_alahis(e)_u`,
+                  activityInflux_AlaHis=factor(dtWT64$`actEX_alahis(e)_l`,
+                                        levels = c(1,0),labels = c('active','inactive')),
+                  activityOutflux_AlaHis=factor(dtWT64$`actEX_alahis(e)_u`,
+                                         levels = c(1,0),labels = c('active','inactive')))
 ```
 
 ```{r plot.wt.his.bndvssol,fig.format='png',fig.dpi=600,fig.cap="\\label{fig:wt_his_bs} Influence of the histidine influx boundary on the biomass production in the wild-type. Sobol points where the boundary was active shown in red."}
-qplot(inBound_HisL,Solution,data = pltDFwt,color=activityInflux,log='x')+
+qplot(inBound_HisL,Solution,data = pltDFwtHis,color=activityInflux_HisL,log='xy')+
     #ggtitle(main =bquote("Histidine influx boundary in wildtype"))+
     theme_bw()
 ```
 
 ```{r plot.wt.his.bndvssol.facet,fig.format='png',fig.dpi=600,fig.cap="\\label{fig:wt_his_bs_f} Influence of the histidine influx boundary on the biomass production in the wild-type. Sobol points where the boundary was active shown in red and placed on different panels."}
-qplot(inBound_HisL,Solution,data = pltDFwt,color=activityInflux,log='x',
-      facets = activityInflux ~ .)+
+qplot(inBound_HisL,Solution,data = pltDFwtHis,color=activityInflux_HisL,log='xy',
+      facets = activityInflux_HisL ~ .)+
     #ggtitle(bquote("Histidine influx boundary in wildtype"))+
     theme_bw()
 ```
 
 ```{r plot.wt.his.bndvsinflux,fig.format='png',fig.dpi=600,fig.cap="\\label{fig:wt_his_bf} Influence of the histidine influx boundary on the actual histidine influx value in the wild-type. Sobol points where the boundary was active shown in red."}
-qplot(inBound_HisL,influx_HisL,data = pltDFwt,color = activityInflux,log='x')+
+qplot(inBound_HisL,influx_HisL,data = pltDFwtHis,color = activityInflux_HisL,log='xy')+
     #ggtitle(bquote("Histidine influx in wildtype"))+
     theme_bw()
 ```
 
 ```{r plot.wt.his.bndvsinflux_facet,fig.format='png',fig.dpi=600,fig.cap="\\label{fig:wt_his_bf_f} Influence of the histidine influx boundary on the actual histidine influx value in the wild-type. Sobol points where the boundary was active shown in red and placed on different panels."}
-qplot(inBound_HisL,influx_HisL,data = pltDFwt,color = activityInflux,log='x',
-      facets = activityInflux ~ .)+
+qplot(inBound_HisL,influx_HisL,data = pltDFwtHis,color = activityInflux_HisL,log='xy',
+      facets = activityInflux_HisL ~ .)+
+    #ggtitle(bquote("Histidine influx in wildtype"))+
+    theme_bw()
+```
+
+
+
+```{r plot.wt.alahis.bndvssol,fig.format='png',fig.dpi=600,fig.cap="\\label{fig:wt_alahis_bs} Influence of the AlaHis influx boundary on the biomass production in the wild-type. Sobol points where the boundary was active shown in red."}
+qplot(inBound_AlaHis,Solution,data = pltDFwtHis,color=activityInflux_AlaHis,log='xy')+
+    #ggtitle(main =bquote("Histidine influx boundary in wildtype"))+
+    theme_bw()
+```
+
+```{r plot.wt.alahis.bndvssol.facet,fig.format='png',fig.dpi=600,fig.cap="\\label{fig:wt_alahis_bs_f} Influence of the AlaHis influx boundary on the biomass production in the wild-type. Sobol points where the boundary was active shown in red and placed on different panels."}
+qplot(inBound_AlaHis,Solution,data = pltDFwtHis,color=activityInflux_AlaHis,log='xy',
+      facets = activityInflux_AlaHis ~ .)+
+    #ggtitle(bquote("Histidine influx boundary in wildtype"))+
+    theme_bw()
+```
+
+```{r plot.wt.alahis.bndvsinflux,fig.format='png',fig.dpi=600,fig.cap="\\label{fig:wt_alahis_bf} Influence of the AlaHis influx boundary on the actual AlaHis influx value in the wild-type. Sobol points where the boundary was active shown in red."}
+qplot(inBound_AlaHis,influx_AlaHis,data = pltDFwtHis,color = activityInflux_AlaHis,log='xy')+
+    #ggtitle(bquote("Histidine influx in wildtype"))+
+    theme_bw()
+```
+
+```{r plot.wt.alahis.bndvsinflux_facet,fig.format='png',fig.dpi=600,fig.cap="\\label{fig:wt_alahis_bf_f} Influence of the AlaHis influx boundary on the actual AlaHis influx value in the wild-type. Sobol points where the boundary was active shown in red and placed on different panels."}
+qplot(inBound_AlaHis,influx_AlaHis,data = pltDFwtHis,color = activityInflux_AlaHis,log='xy',
+      facets = activityInflux_AlaHis ~ .)+
     #ggtitle(bquote("Histidine influx in wildtype"))+
     theme_bw()
 ```
@@ -622,36 +628,58 @@ tryptophan influx itself and biomass production.
 ```{r prepare.wt.trpB.plot.dataset}
 re_names<-c("EX_trp_L(e)", "TRPAS2i", "TRPTA", "TRP_Ltex", "TRPt2rpp")
 trpB<-fluxes_WT[,match(paste0(re_names,'_fl'),names(fluxes_WT)),with=FALSE]
-pltDFtrp<-data.frame(Solution=fluxes_WT$Solution,
-                  influx_TrpL=abs(trpB$`EX_trp_L(e)_fl`),
-                  inBound_TrpL=fluxes_WT$`EX_trp_L(e)_l`,
-                  outBound_TrpL=fluxes_WT$`EX_trp_L(e)_u`,
+pltDFwtTrp<-data.frame(Solution=fluxes_WT$Solution,
+                  influx_TrpL=-1*(trpB$`EX_trp_L(e)_fl`),
+                  inBound_TrpL=1000*fluxes_WT$`EX_trp_L(e)_l`,
+                  outBound_TrpL=1000*fluxes_WT$`EX_trp_L(e)_u`,
                   activityInflux=factor(dtWT64$`actEX_trp_L(e)_l`,levels = c(1,0),labels = c('active','inactive')),
                   activityOutflux=factor(dtWT64$`actEX_trp_L(e)_u`,levels = c(1,0),labels = c('active','inactive')))
 ```
 ```{r plot.wt.trpB.bndvssol,fig.format='png',fig.dpi=600,fig.dpi=600,fig.cap="\\label{fig:wt_trp_bs_f} Influence of the tryptophan influx boundary on the biomass production in the wild-type. Sobol points where the boundary was active shown in red and placed on different panels."}
-qplot(inBound_TrpL,Solution,data = pltDFtrp,color=activityInflux,log='x')+
+qplot(inBound_TrpL,Solution,data = pltDFwtTrp,color=activityInflux,log='xy')+
     #ggtitle(bquote("Tryptophan influx boundary in wildtype"))+
     theme_bw()
 ```
 ```{r plot.wt.trpB.bndvssol_facet,fig.format='png',fig.dpi=600,fig.cap="\\label{fig:wt_trp_bs} Influence of the tryptophan influx boundary on the biomass production in the wild-type. Sobol points where the boundary was active shown in red."}
-qplot(inBound_TrpL,Solution,data = pltDFtrp,color=activityInflux,log='x',
+qplot(inBound_TrpL,Solution,data = pltDFwtTrp,color=activityInflux,log='xy',
       facets = activityInflux ~ .)+
     #ggtitle(bquote("Tryptophan influx boundary in wildtype"))+
     theme_bw()
 ```
 
 ```{r plot.wt.trpB.bndvsinflu,fig.format='png',fig.dpi=600,fig.cap="\\label{fig:wt_trp_bf} Influence of the tryptophan influx boundary on the actual tryptophan influx value in the wild-type. Sobol points where the boundary was active shown in red."}
-qplot(inBound_TrpL,influx_TrpL,data = pltDFtrp,color = activityInflux,log='x')+
+qplot(inBound_TrpL,influx_TrpL,data = pltDFwtTrp,color = activityInflux,log='x')+
     #ggtitle(bquote("Tryptophan influx in wildtype"))+
     theme_bw()
 ```
 
 ```{r plot.wt.trpB.bndvsinflu_facet,fig.format='png',fig.dpi=600,fig.cap="\\label{fig:wt_trp_bf_f} Influence of the tryptophan influx boundary on the actual tryptophan influx value in the wild-type. Sobol points where the boundary was active shown in red and placed on different panels."}
-qplot(inBound_TrpL,influx_TrpL,data = pltDFtrp,color = activityInflux,log='x',
+qplot(inBound_TrpL,influx_TrpL,data = pltDFwtTrp,color = activityInflux,log='x',
       facets = activityInflux ~ .)+
     #ggtitle(bquote("Tryptophan influx in wildtype"))+
     theme_bw()
+```
+
+```{r flux.sign.wt}
+t<-as.data.frame(table(sign(pltDFwtHis$influx_AlaHis)))
+names(t)<-c('Flux direction','Count')
+t$Flux<-'AlaHis'
+signDF<-t
+t<-as.data.frame(table(sign(pltDFwtHis$influx_HisL)))
+names(t)<-c('Flux direction','Count')
+t$Flux<-'HisL'
+signDF<-rbind(signDF,t)
+t<-as.data.frame(table(sign(pltDFwtTrp$influx_TrpL)))
+names(t)<-c('Flux direction','Count')
+t$Flux<-'TrpL'
+signDF<-rbind(signDF,t)
+signDF$Percent<-signDF$Count*100/nrow(pltDFwtTrp)
+levels(signDF$`Flux direction`)<-c('Out','Blocked','In')
+signDF<-signDF[,c('Flux','Flux direction','Count','Percent')]
+pander(signDF,
+       caption=paste('\\label{tab:flx_sign_wt} Fractions of Sobol points groupped ',
+                     'according to direction of exchange fluxes for AlaHis, HisL, ',
+                     'and TrpL.'))
 ```
 
 
@@ -661,16 +689,16 @@ We group all significantly sensitive exchange reaction boundary values and
 corresponding metabolites into four groups according to the type of boundary 
 (upper or lower) and sign of the significance coefficient (PRCC). Number of
 reactions in each group is shown in the Supplementary Table \ref{tab:wt_int_fq}.
-Some metabolites could have both their exchange reaciton bound significant,
+Some metabolites could have both their exchange reactions bound significantly,
 such metabolites are listed in the Supplementary Table \ref{tab:bidir_met_p10}. 
 
-Metabolites, which exchange reaction lower or upper boundary has positive sensitivity coefficient, 
+Metabolites, which exchange reaction lower or upper boundary have a positive sensitivity coefficient, 
 we will call substrates and products correspondingly. Substrates and products for the
-wild-type model shown in Supplementary Tables \ref{tab:SubsWT10} and \ref{tab:ProdsWT10}.
+wild-type model are shown in Supplementary Tables \ref{tab:SubsWT10} and \ref{tab:ProdsWT10}.
 
-Metabolites, which exchange reaction lower or upper boundary has negative sensitivity coefficient, 
+Metabolites, which exchange reaction lower or upper boundary have a negative sensitivity coefficient, 
 we will call repellents and attractants correspondingly. Repellents and attractants for the
-wild-type model shown in Supplementary Tables \ref{tab:RepsWT10} and \ref{tab:AttrsWT10}.
+wild-type model are shown in Supplementary Tables \ref{tab:RepsWT10} and \ref{tab:AttrsWT10}.
 
 ```{r interaction.types.wt}
 prnTbl<-df[(card>1),c(1:3,6,32,33,35,37,9)]
@@ -737,54 +765,18 @@ printTable(repTbl10[order(pval,original)], digits = 5,
 Auxotrophic mutant Escherichia coli str. K12 substr. MG1655 $\Delta hisD$ was 
 created by knocking out hisD gene, which encodes **Histidinol dehydrogenase**. 
 This enzyme controls the last step of the *de novo* histidine biosynthesis. 
-The original AGORA2 model has discrepancy in gene annotation of the *de novo* 
+The original AGORA2 model has a discrepancy in gene annotation of the *de novo* 
 histidine biosynthesis. Reactions *HISTLOX* and *HISTDOX* are controlled by the gene `511145.12.peg.2097`, while reaction *HISTD* is controlled by gene 
-named `511145.12.2097_15.peg`, which do not exists in the PATRIC database. Because
+named `511145.12.2097_15.peg`, which do not exist in the PATRIC database. Because
 of this mutant model was created by removing reactions  *HISTLOX*, *HISTD*, and *HISTDOX*.
 
 ### Read data
 
-The following code loads simulation data:
+As we already identify the desired number of Sobol point by analysis of the 
+wild type model, we load only one set of data. The following code loads simulation data:
 ```{r read.rds.hisD,eval=TRUE,cache=TRUE}
 d<-"Escherichia_coli_str_K_12_substr_MG1655_ko_hisD"
-mdf<-fread(file=file.path('data',paste0(d,'.csv')))
-fr64<-fread(file.path('data',d,'flux_range_64.csv'))
-frdf<-fread(file = file.path('data',d,'prcc_64.csv'))
-```
-
-```{r make.data.table.hisD,eval=TRUE,cache=TRUE}
-df<-as.data.table(frdf)
-df$HMDF["['NaN']"==df$HMDF]<-""
-df$ChEBI["['NaN']"==df$ChEBI]<-""
-df$InChI["['NaN']"==df$InChI]<-""
-df$KEGG["['NaN']"==df$KEGG]<-""
-df$SEED["['NaN']"==df$SEED]<-""
-df$BiGG["['NaN']"==df$BiGG]<-""
-df$LipidMaps["['NaN']"==df$LipidMaps]<-""
-df$MetaNetX["['NaN']"==df$MetaNetX]<-""
-df$Reactome["['NaN']"==df$Reactome]<-""
-df$PubChem["['NaN']"==df$PubChem]<-""
-df$HMDF[is.na(df$HMDF)]<-""
-df$ChEBI[is.na(df$ChEBI)]<-""
-df$InChI[is.na(df$InChI)]<-""
-df$KEGG[is.na(df$KEGG)]<-""
-df$SEED[is.na(df$SEED)]<-""
-df$BiGG[is.na(df$BiGG)]<-""
-df$LipidMaps[is.na(df$LipidMaps)]<-""
-df$MetaNetX[is.na(df$MetaNetX)]<-""
-df$Reactome[is.na(df$Reactome)]<-""
-df$PubChem[is.na(df$PubChem)]<-""
-df$HMDF <- gsub("(\\[|\\]|')",'',df$HMDF)
-df$ChEBI <- gsub("(\\[|\\]|')",'',df$ChEBI)
-df$InChI <- gsub("(\\[|\\]|')",'',df$InChI)
-df$KEGG <- gsub("(\\[|\\]|')",'',df$KEGG)
-df$SEED <- gsub("(\\[|\\]|')",'',df$SEED)
-df$BiGG <- gsub("(\\[|\\]|')",'',df$BiGG)
-df$LipidMaps <- gsub("(\\[|\\]|')",'',df$LipidMaps)
-df$MetaNetX <- gsub("(\\[|\\]|')",'',df$MetaNetX)
-df$Reactome <- gsub("(\\[|\\]|')",'',df$Reactome)
-df$PubChem <- gsub("(\\[|\\]|')",'',df$PubChem)
-df$MicrobeID<-'hisD'
+df<-fread(file = file.path('data',d,'prcc_64.csv'))
 ```
 
 ```{r read.active.df16.hisD,echo=FALSE,cache=FALSE,eval=TRUE}
@@ -827,35 +819,70 @@ fluxes_hisD<-fread(file=file.path('data',d,'mutant_related_fluxes.csv'))
 re_names<-c("ALAHIS1c", "EX_his_L(e)", "HISCAT1pp", "HIS_Ltex", "HISabcpp", "HISt2pp","EX_alahis(e)")
 hisL<-fluxes_hisD[,match(paste0(re_names,'_fl'),names(fluxes_hisD)),with=FALSE]
 pltDFhis<-data.frame(Solution=fluxes_hisD$Solution,
-                  influx_HisL=abs(hisL$`EX_his_L(e)_fl`),
-                  inBound_HisL=fluxes_hisD$`EX_his_L(e)_l`,
-                  outBound_HisL=fluxes_hisD$`EX_his_L(e)_u`,
-                  activityInflux=factor(dtHisD64$`actEX_his_L(e)_l`,levels = c(1,0),labels = c('active','inactive')),
-                  activityOutflux=factor(dtHisD64$`actEX_his_L(e)_u`,levels = c(1,0),labels = c('active','inactive')))
+                  influx_HisL=-1*(hisL$`EX_his_L(e)_fl`),
+                  inBound_HisL=1000*fluxes_hisD$`EX_his_L(e)_l`,
+                  outBound_HisL=1000*fluxes_hisD$`EX_his_L(e)_u`,
+                  activityInflux_HisL=factor(dtHisD64$`actEX_his_L(e)_l`,
+                                        levels = c(1,0),labels = c('active','inactive')),
+                  activityOutflux_HisL=factor(dtHisD64$`actEX_his_L(e)_u`,
+                                         levels = c(1,0),labels = c('active','inactive')),
+                  influx_AlaHis=-1*(hisL$`EX_alahis(e)_fl`),
+                  inBound_AlaHis=1000*fluxes_hisD$`EX_alahis(e)_l`,
+                  outBound_AlaHis=1000*fluxes_hisD$`EX_alahis(e)_u`,
+                  activityInflux_AlaHis=factor(dtHisD64$`actEX_alahis(e)_l`,
+                                        levels = c(1,0),labels = c('active','inactive')),
+                  activityOutflux_AlaHis=factor(dtHisD64$`actEX_alahis(e)_u`,
+                                         levels = c(1,0),labels = c('active','inactive')))
 
 ```
 ```{r plot.hisD.bndvssol,fig.format='png',fig.dpi=600,fig.cap="\\label{fig:hisD_his_bs} Influence of the histidine influx boundary on the biomass production in the $\\Delta hisD$ model. Sobol points where the boundary was active shown in red."}
-qplot(inBound_HisL,Solution,data = pltDFhis,color=activityInflux,log='x')+
+qplot(inBound_HisL,Solution,data = pltDFhis,color=activityInflux_HisL,log='xy')+
     #ggtitle(bquote("Histidine influx boundary in "~Delta~"hisD mutant"))+
     theme_bw()
 ```
 ```{r plot.hisD.bndvssol_facet,fig.format='png',fig.dpi=600,fig.cap="\\label{fig:hisD_his_bs_f} Influence of the histidine influx boundary on the biomass production in the $\\Delta hisD$ model. Sobol points where the boundary was active shown in red and placed on different panels."}
-qplot(inBound_HisL,Solution,data = pltDFhis,color=activityInflux,log='x',
-      facets = activityInflux ~ .)+
+qplot(inBound_HisL,Solution,data = pltDFhis,color=activityInflux_HisL,log='xy',
+      facets = activityInflux_HisL ~ .)+
     #ggtitle(bquote("Histidine influx boundary in "~Delta~"hisD mutant"))+
     theme_bw()
 ```
 
 ```{r plot.hisD.bndvsinflux,fig.format='png',fig.dpi=600,fig.cap="\\label{fig:hisD_his_bf} Influence of the histidine influx boundary on the actual histidine influx value in the $\\Delta hisD$ model. Sobol points where the boundary was active shown in red."}
-qplot(inBound_HisL,influx_HisL,data = pltDFhis,color = activityInflux,
-      log='x')+
+qplot(inBound_HisL,influx_HisL,data = pltDFhis,color = activityInflux_HisL,
+      log='xy')+
     #ggtitle(bquote("Histidine influx in "~Delta~"hisD mutant"))+
     theme_bw()
 ```
 
 ```{r plot.hisD.bndvsinflux_facet,fig.format='png',fig.dpi=600,fig.cap="\\label{fig:hisD_his_bf_f} Influence of the histidine influx boundary on the actual histidine influx value in the $\\Delta hisD$ model. Sobol points where the boundary was active shown in red and placed on different panels."}
-qplot(inBound_HisL,influx_HisL,data = pltDFhis,color = activityInflux,log='x',
-      facets = activityInflux ~ .)+
+qplot(inBound_HisL,influx_HisL,data = pltDFhis,color = activityInflux_HisL,log='xy',
+      facets = activityInflux_HisL ~ .)+
+    #ggtitle(bquote("Histidine influx in "~Delta~"hisD mutant"))+
+    theme_bw()
+```
+
+```{r plot.hisD.bndvssol_AlaHis,fig.format='png',fig.dpi=600,fig.cap="\\label{fig:hisD_alahis_bs} Influence of the AlaHis influx boundary on the biomass production in the $\\Delta hisD$ model. Sobol points where the boundary was active shown in red."}
+qplot(inBound_AlaHis,Solution,data = pltDFhis,color=activityInflux_AlaHis,log='xy')+
+    #ggtitle(bquote("AlaHis influx boundary in "~Delta~"hisD mutant"))+
+    theme_bw()
+```
+```{r plot.hisD.bndvssol_AlaHis_facet,fig.format='png',fig.dpi=600,fig.cap="\\label{fig:hisD_alahis_bs_f} Influence of the AlaHis influx boundary on the biomass production in the $\\Delta hisD$ model. Sobol points where the boundary was active shown in red and placed on different panels."}
+qplot(inBound_AlaHis,Solution,data = pltDFhis,color=activityInflux_AlaHis,log='xy',
+      facets = activityInflux_AlaHis ~ .)+
+    #ggtitle(bquote("Histidine influx boundary in "~Delta~"hisD mutant"))+
+    theme_bw()
+```
+
+```{r plot.hisD.bndvsinflux_AlaHis,fig.format='png',fig.dpi=600,fig.cap="\\label{fig:hisD_alahis_bf} Influence of the AlaHis influx boundary on the actual AlaHis influx value in the $\\Delta hisD$ model. Sobol points where the boundary was active shown in red."}
+qplot(inBound_AlaHis,influx_AlaHis,data = pltDFhis,color = activityInflux_AlaHis,
+      log='xy')+
+    #ggtitle(bquote("Histidine influx in "~Delta~"hisD mutant"))+
+    theme_bw()
+```
+
+```{r plot.hisD.bndvsinflux_AlaHis_facet,fig.format='png',fig.dpi=600,fig.cap="\\label{fig:hisD_alahis_bf_f} Influence of the AlaHis influx boundary on the actual AlaHis influx value in the $\\Delta hisD$ model. Sobol points where the boundary was active shown in red and placed on different panels."}
+qplot(inBound_AlaHis,influx_AlaHis,data = pltDFhis,color = activityInflux_AlaHis,log='xy',
+      facets = activityInflux_AlaHis ~ .)+
     #ggtitle(bquote("Histidine influx in "~Delta~"hisD mutant"))+
     theme_bw()
 ```
@@ -866,17 +893,16 @@ qplot(inBound_HisL,influx_HisL,data = pltDFhis,color = activityInflux,log='x',
 
 We group all significantly sensitive exchange reaction boundary values and 
 corresponding metabolites into four groups according to the type of boundary 
-(upper or lower) and sign of the significance coefficient (PRCC). Number of
+(upper or lower) and sign of the significance coefficient (PRCC). The number of
 reactions in each group for $\Delta hisD$ is shown in the Supplementary Table \ref{tab:hisD_int_fq}.
 
-Metabolites, which exchange reaction lower or upper boundary has positive sensitivity coefficient, 
+Metabolites, which exchange reaction lower or upper boundary have a positive sensitivity coefficient, 
 we will call substrates and products correspondingly. Substrates and products for the
 $\Delta hisD$ model shown in Supplementary Tables \ref{tab:SubsHisD10} and \ref{tab:ProdsHisD10}.
 
-Metabolites, which exchange reaction lower or upper boundary has negative sensitivity coefficient, 
+Metabolites, which exchange reaction lower or upper boundary have a negative sensitivity coefficient, 
 we will call repellents and attractants correspondingly. Repellents and attractants for the
 $\Delta hisD$ model shown in Supplementary Tables \ref{tab:RepsHisD10} and \ref{tab:AttrsHisD10}.
-
 
 ```{r interaction.types.hisD}
 prnTbl<-df[(card>1),c(1:3,6,31,32,34,36,8)]
@@ -939,14 +965,14 @@ printTable(repTbl10[order(pval,original)], digits = 5,
 
 ## Escherichia coli str. K12 substr. MG1655 ko hisD no AlaHis transport
 
-Analysis of the simulation results of $\Delta hisD$ model demonstrate unexpected
-results: model apeears to be insensitive to the histidine influx. Detailed analysis
+Analysis of the simulation results of $\Delta hisD$ model demonstrates unexpected
+results: the model appears to be insensitive to the histidine influx. Detailed analysis
 of the model structure reveals that histidine could be provided not only as pure
-amino acid, but also as dipeptide AlaHis. To exclude influence of the dipeptide from
+amino acid but also as dipeptide AlaHis. To exclude the influence of the dipeptide from
 analysis new model was created by removing the reaction *ALAHIStex* to prevent
-AlaHis assimilation. The same result could be obtained by removing exchange reaction
+AlaHis assimilation. The same result could be obtained by removing the exchange reaction
 *EX_alahis(e)*, but that would change the dimensionality of the parameter space 
-that sampled by the Sobol points. This change will make impossible to compare
+sampled by the Sobol points. This change will make it impossible to compare
 flux distributions between this model and other variants. 
 
 #### Read data
@@ -954,46 +980,8 @@ flux distributions between this model and other variants.
 The following code loads simulation data:
 ```{r read.rds.hisD.noalahis,eval=TRUE,cache=TRUE}
 d<-"Escherichia_coli_str_K_12_substr_MG1655_ko_hisD_block_alahis"
-mdf<-fread(file=file.path('data',paste0(d,'.csv')))
-fr64<-fread(file.path('data',d,'flux_range_64.csv'))
-frdf<-fread(file = file.path('data',d,'prcc_64.csv'))
+df<-fread(file = file.path('data',d,'prcc_64.csv'))
 ```
-
-```{r make.data.table.hisD.noalahis,eval=TRUE,cache=TRUE}
-df<-as.data.table(frdf)
-df$HMDF["['NaN']"==df$HMDF]<-""
-df$ChEBI["['NaN']"==df$ChEBI]<-""
-df$InChI["['NaN']"==df$InChI]<-""
-df$KEGG["['NaN']"==df$KEGG]<-""
-df$SEED["['NaN']"==df$SEED]<-""
-df$BiGG["['NaN']"==df$BiGG]<-""
-df$LipidMaps["['NaN']"==df$LipidMaps]<-""
-df$MetaNetX["['NaN']"==df$MetaNetX]<-""
-df$Reactome["['NaN']"==df$Reactome]<-""
-df$PubChem["['NaN']"==df$PubChem]<-""
-df$HMDF[is.na(df$HMDF)]<-""
-df$ChEBI[is.na(df$ChEBI)]<-""
-df$InChI[is.na(df$InChI)]<-""
-df$KEGG[is.na(df$KEGG)]<-""
-df$SEED[is.na(df$SEED)]<-""
-df$BiGG[is.na(df$BiGG)]<-""
-df$LipidMaps[is.na(df$LipidMaps)]<-""
-df$MetaNetX[is.na(df$MetaNetX)]<-""
-df$Reactome[is.na(df$Reactome)]<-""
-df$PubChem[is.na(df$PubChem)]<-""
-df$HMDF <- gsub("(\\[|\\]|')",'',df$HMDF)
-df$ChEBI <- gsub("(\\[|\\]|')",'',df$ChEBI)
-df$InChI <- gsub("(\\[|\\]|')",'',df$InChI)
-df$KEGG <- gsub("(\\[|\\]|')",'',df$KEGG)
-df$SEED <- gsub("(\\[|\\]|')",'',df$SEED)
-df$BiGG <- gsub("(\\[|\\]|')",'',df$BiGG)
-df$LipidMaps <- gsub("(\\[|\\]|')",'',df$LipidMaps)
-df$MetaNetX <- gsub("(\\[|\\]|')",'',df$MetaNetX)
-df$Reactome <- gsub("(\\[|\\]|')",'',df$Reactome)
-df$PubChem <- gsub("(\\[|\\]|')",'',df$PubChem)
-df$MicrobeID<-'hisD'
-```
-
 
 ```{r read.active.df16.hisD.noalahis,echo=FALSE,cache=FALSE,eval=TRUE}
 dt<-fread(file=file.path('data',d,'fba_sobol_isactive.csv'))
@@ -1037,7 +1025,7 @@ Similar to Supplementary Figures \ref{fig:wt_his_bs}, \ref{fig:wt_his_bs_f},
 \ref{fig:wt_his_bf}, and \ref{fig:wt_his_bf_f}, which show influence of the 
 histidine influx on the wild-type model, Supplementary Figures \ref{fig:hisD2_his_bs}, 
 \ref{fig:hisD2_his_bs_f}, \ref{fig:hisD2_his_bf}, and \ref{fig:hisD2_his_bf_f} 
-show influence of the histidine influx on the $\Delta hisD$ model  with 
+show the influence of the histidine influx on the $\Delta hisD$ model  with 
 blocked AlaHis assimilation.
 
 ```{r prepare.hisD.noalahis.plot.dataset}
@@ -1045,33 +1033,33 @@ fluxes_hisD_alahis<-fread(file=file.path('data',d,'mutant_related_fluxes.csv'))
 re_names<-c("ALAHIS1c", "EX_his_L(e)", "HISCAT1pp", "HIS_Ltex", "HISabcpp", "HISt2pp")
 hisL<-fluxes_hisD_alahis[,match(paste0(re_names,'_fl'),names(fluxes_hisD)),with=FALSE]
 pltDFhis<-data.frame(Solution=fluxes_hisD_alahis$Solution,
-                  influx_HisL=abs(hisL$`EX_his_L(e)_fl`),
-                  inBound_HisL=fluxes_hisD$`EX_his_L(e)_l`,
-                  outBound_HisL=fluxes_hisD$`EX_his_L(e)_u`,
+                  influx_HisL=-1*(hisL$`EX_his_L(e)_fl`),
+                  inBound_HisL=1000*fluxes_hisD$`EX_his_L(e)_l`,
+                  outBound_HisL=1000*fluxes_hisD$`EX_his_L(e)_u`,
                   activityInflux=factor(dtHisD64_alahis$`actEX_his_L(e)_l`,levels = c(1,0),labels = c('active','inactive')),
                   activityOutflux=factor(dtHisD64_alahis$`actEX_his_L(e)_u`,levels = c(1,0),labels = c('active','inactive')))
 
 ```
 ```{r plot.hisD.noalahis.bndvssol,fig.format='png',fig.dpi=600,fig.cap="\\label{fig:hisD2_his_bs} Influence of the histidine influx boundary on the biomass production in the $\\Delta hisD$ model with blocked AlaHis assimilation. Sobol points where the boundary was active shown in red."}
-qplot(inBound_HisL,Solution,data = pltDFhis,color=activityInflux,log='x')+
+qplot(inBound_HisL,Solution,data = pltDFhis,color=activityInflux,log='xy')+
     #ggtitle(bquote("Histidine influx boundary in "~Delta~"hisD mutant"))+
     theme_bw()
 ```
 ```{r plot.hisD.noalahis.bndvssol.facet,fig.format='png',fig.dpi=600,fig.cap="\\label{fig:hisD2_his_bs_f} Influence of the histidine influx boundary on the biomass production in the $\\Delta hisD$ model with blocked AlaHis assimilation. Sobol points where the boundary was active shown in red and placed on different panels."}
-qplot(inBound_HisL,Solution,data = pltDFhis,color=activityInflux,log='x',
+qplot(inBound_HisL,Solution,data = pltDFhis,color=activityInflux,log='xy',
       facets = activityInflux ~ .)+
     #ggtitle(bquote("Histidine influx boundary in "~Delta~"hisD mutant"))+
     theme_bw()
 ```
 
 ```{r plot.hisD.noalahis.bndvsinflux,fig.format='png',fig.dpi=600,fig.cap="\\label{fig:hisD2_his_bf} Influence of the histidine influx boundary on the actual histidine influx value in the $\\Delta hisD$ model with blocked AlaHis assimilation. Sobol points where the boundary was active shown in red."}
-qplot(inBound_HisL,influx_HisL,data = pltDFhis,color = activityInflux,log='x')+
+qplot(inBound_HisL,influx_HisL,data = pltDFhis,color = activityInflux,log='xy')+
     #ggtitle(bquote("Histidine influx in "~Delta~"hisD mutant"))+
     theme_bw()
 ```
 
 ```{r plot.hisD.noalahis.bndvsinflux_facet,fig.format='png',fig.dpi=600,fig.cap="\\label{fig:hisD2_his_bf_f} Influence of the histidine influx boundary on the actual histidine influx value in the $\\Delta hisD$ model with blocked AlaHis assimilation. Sobol points where the boundary was active shown in red and placed on different panels."}
-qplot(inBound_HisL,influx_HisL,data = pltDFhis,color = activityInflux,log='x',
+qplot(inBound_HisL,influx_HisL,data = pltDFhis,color = activityInflux,log='xy',
       facets = activityInflux ~ .)+
     #ggtitle(bquote("Histidine influx in "~Delta~"hisD mutant"))+
     theme_bw()
@@ -1083,19 +1071,18 @@ qplot(inBound_HisL,influx_HisL,data = pltDFhis,color = activityInflux,log='x',
 
 We group all significantly sensitive exchange reaction boundary values and 
 corresponding metabolites into four groups according to the type of boundary 
-(upper or lower) and sign of the significance coefficient (PRCC). Number of
+(upper or lower) and sign of the significance coefficient (PRCC). The number of
 reactions in each group for $\Delta hisD$ is shown in the Supplementary Table \ref{tab:hisD2_int_fq}.
 
-Metabolites, which exchange reaction lower or upper boundary has positive sensitivity coefficient, 
+Metabolites, which exchange reaction lower or upper boundary have a positive sensitivity coefficient, 
 we will call substrates and products correspondingly. Substrates and products for the
 $\Delta hisD$ model shown in Supplementary Tables \ref{tab:SubsHisDnoalahis10} 
 and \ref{tab:ProdsHisDnoalahis10}.
 
-Metabolites, which exchange reaction lower or upper boundary has negative sensitivity coefficient, 
+Metabolites, which exchange reaction lower or upper boundary have a negative sensitivity coefficient, 
 we will call repellents and attractants correspondingly. Repellents and attractants for the
 $\Delta hisD$ model shown in Supplementary Tables \ref{tab:RepsHisDnoalahis10} 
 and \ref{tab:AttrsHisDnoalahis10}.
-
 
 ```{r interaction.types.hisD.noalahis}
 prnTbl<-df[(card>1),c(1:3,6,31,32,34,36,8)]
@@ -1168,59 +1155,22 @@ printTable(repTbl10[order(pval,original)], digits = 5,
 
 ## Escherichia coli str. K12 substr. MG1655 ko trpB
 
-Metabolic model of auxotrophic mutant $\Delta trpB$ was created by knocking out
+The metabolic model of auxotrophic mutant $\Delta trpB$ was created by knocking out
 Tryptophan synthase beta chain gene *trpB*, which suppose to control three 
 reactions *TRPS1*, *TRPS2*, and *TRPS3*. However in the wild-type model 
-*Escherichia_coli_str_K_12_substr_MG1655* genes seems to be duplicated: TRPS1 
+*Escherichia_coli_str_K_12_substr_MG1655* genes seem to be duplicated: TRPS1 
 is controlled by two genes *511145.12.1311_11.peg* and *511145.12.1310_10.peg*, 
 while TRPS2 and TRPS3 are controlled by another two genes *511145.12.peg.1311* 
-and *511145.12.peg.1310*. And the second set of genes could be found on PATRIC, 
-while search for the first two genes gives no results. So the actual model was
+and *511145.12.peg.1310*. The second set of genes could be found on PATRIC, 
+while the search for the first two genes gives no results. So the actual model was
 created by removing three reactions *TRPS1*, *TRPS2*, and *TRPS3*.
 
 ### Read data
 
 The following code loads simulation data:
 ```{r read.rds.trpB,eval=TRUE,cache=TRUE}
-    d<-"Escherichia_coli_str_K_12_substr_MG1655_ko_trpB"
-mdf<-fread(file=file.path('data',paste0(d,'.csv')))
-fr64<-fread(file.path('data',d,'flux_range_64.csv'))
-frdf<-fread(file = file.path('data',d,'prcc_64.csv'))
-```
-
-```{r make.data.table.trpB,eval=TRUE,cache=TRUE}
-df<-as.data.table(frdf)
-df$HMDF["['NaN']"==df$HMDF]<-""
-df$ChEBI["['NaN']"==df$ChEBI]<-""
-df$InChI["['NaN']"==df$InChI]<-""
-df$KEGG["['NaN']"==df$KEGG]<-""
-df$SEED["['NaN']"==df$SEED]<-""
-df$BiGG["['NaN']"==df$BiGG]<-""
-df$LipidMaps["['NaN']"==df$LipidMaps]<-""
-df$MetaNetX["['NaN']"==df$MetaNetX]<-""
-df$Reactome["['NaN']"==df$Reactome]<-""
-df$PubChem["['NaN']"==df$PubChem]<-""
-df$HMDF[is.na(df$HMDF)]<-""
-df$ChEBI[is.na(df$ChEBI)]<-""
-df$InChI[is.na(df$InChI)]<-""
-df$KEGG[is.na(df$KEGG)]<-""
-df$SEED[is.na(df$SEED)]<-""
-df$BiGG[is.na(df$BiGG)]<-""
-df$LipidMaps[is.na(df$LipidMaps)]<-""
-df$MetaNetX[is.na(df$MetaNetX)]<-""
-df$Reactome[is.na(df$Reactome)]<-""
-df$PubChem[is.na(df$PubChem)]<-""
-df$HMDF <- gsub("(\\[|\\]|')",'',df$HMDF)
-df$ChEBI <- gsub("(\\[|\\]|')",'',df$ChEBI)
-df$InChI <- gsub("(\\[|\\]|')",'',df$InChI)
-df$KEGG <- gsub("(\\[|\\]|')",'',df$KEGG)
-df$SEED <- gsub("(\\[|\\]|')",'',df$SEED)
-df$BiGG <- gsub("(\\[|\\]|')",'',df$BiGG)
-df$LipidMaps <- gsub("(\\[|\\]|')",'',df$LipidMaps)
-df$MetaNetX <- gsub("(\\[|\\]|')",'',df$MetaNetX)
-df$Reactome <- gsub("(\\[|\\]|')",'',df$Reactome)
-df$PubChem <- gsub("(\\[|\\]|')",'',df$PubChem)
-df$MicrobeID<-'trpB'
+d<-"Escherichia_coli_str_K_12_substr_MG1655_ko_trpB"
+df<-fread(file = file.path('data',d,'prcc_64.csv'))
 ```
 
 ```{r read.active.df16.trpB,echo=FALSE,cache=FALSE,eval=TRUE}
@@ -1261,41 +1211,41 @@ qplot(df$pval,bins = 50)+
 Similar to Supplementary Figures \ref{fig:wt_trp_bs}, \ref{fig:wt_trp_bs_f}, 
 \ref{fig:wt_trp_bf}, and \ref{fig:wt_trp_bf_f}, which show influence of the 
 tryptophan influx on the wild-type model, Supplementary Figures \ref{fig:trpB_trp_bs}, \ref{fig:trpB_trp_bs_f}, \ref{fig:trpB_trp_bf}, and \ref{fig:trpB_trp_bf_f} 
-show influence of the tryptophan influx on the $\Delta trpB$ model.
+show the influence of the tryptophan influx on the $\Delta trpB$ model.
 
 ```{r prepare.trpB.plot.dataset}
 fluxes_trpB<-fread(file=file.path('data',d,'mutant_related_fluxes.csv'))
 re_names<-c("EX_trp_L(e)", "TRPAS2i", "TRPTA", "TRP_Ltex", "TRPt2rpp")
 trpB<-fluxes_trpB[,match(paste0(re_names,'_fl'),names(fluxes_trpB)),with=FALSE]
 pltDFtrp<-data.frame(Solution=fluxes_trpB$Solution,
-                  influx_TrpL=abs(trpB$`EX_trp_L(e)_fl`),
-                  inBound_TrpL=fluxes_trpB$`EX_trp_L(e)_l`,
-                  outBound_TrpL=fluxes_trpB$`EX_trp_L(e)_u`,
+                  influx_TrpL=-1*(trpB$`EX_trp_L(e)_fl`),
+                  inBound_TrpL=1000*fluxes_trpB$`EX_trp_L(e)_l`,
+                  outBound_TrpL=1000*fluxes_trpB$`EX_trp_L(e)_u`,
                   activityInflux=factor(dtTrpB64$`actEX_trp_L(e)_l`,levels = c(1,0),labels = c('active','inactive')),
                   activityOutflux=factor(dtTrpB64$`actEX_trp_L(e)_u`,levels = c(1,0),labels = c('active','inactive')))
 ```
 
 ```{r plot.trpB.bndvssol,fig.format='png',fig.dpi=600,fig.cap="\\label{fig:trpB_trp_bs} Influence of the tryptophan influx boundary on the biomass production in the $\\Delta trpB$ model. Sobol points where the boundary was active shown in red."}
-qplot(inBound_TrpL,Solution,data = pltDFtrp,color=activityInflux,log='x')+
+qplot(inBound_TrpL,Solution,data = pltDFtrp,color=activityInflux,log='xy')+
     #ggtitle(bquote("Tryptophan influx boundary in "~Delta~"trpB mutant"))+
     theme_bw()
 ```
 
 ```{r plot.trpB.bndvssol_facet,fig.format='png',fig.dpi=600,fig.cap="\\label{fig:trpB_trp_bs_f} Influence of the tryptophan influx boundary on the biomass production in the $\\Delta trpB$ model. Sobol points where the boundary was active shown in red and placed on different panels."}
-qplot(inBound_TrpL,Solution,data = pltDFtrp,color=activityInflux,log='x',
+qplot(inBound_TrpL,Solution,data = pltDFtrp,color=activityInflux,log='xy',
       facets = activityInflux ~ .)+
     #ggtitle(bquote("Tryptophan influx boundary in "~Delta~"trpB mutant"))+
     theme_bw()
 ```
 
 ```{r plot.trpB.bndvsinflux,fig.format='png',fig.dpi=600,fig.cap="\\label{fig:trpB_trp_bf} Influence of the tryptophan influx boundary on the actual tryptophan influx value in the $\\Delta trpB$ model. Sobol points where the boundary was active shown in red."}
-qplot(inBound_TrpL,influx_TrpL,data = pltDFtrp,color = activityInflux,log='x')+
+qplot(inBound_TrpL,influx_TrpL,data = pltDFtrp,color = activityInflux,log='xy')+
     #ggtitle(bquote("Tryptophan influx in "~Delta~"trpB mutant"))+
     theme_bw()
 ```
 
 ```{r plot.trpB.bndvsinflux.facet,fig.format='png',fig.dpi=600,fig.cap="\\label{fig:trpB_trp_bf_f} Influence of the tryptophan influx boundary on the actual tryptophan influx value in the $\\Delta trpB$ model. Sobol points where the boundary was active shown in red and placed on different panels."}
-qplot(inBound_TrpL,influx_TrpL,data = pltDFtrp,color = activityInflux,log='x',
+qplot(inBound_TrpL,influx_TrpL,data = pltDFtrp,color = activityInflux,log='xy',
       facets = activityInflux ~ .)+
     #ggtitle(bquote("Tryptophan influx in "~Delta~"trpB mutant"))+
     theme_bw()
@@ -1308,11 +1258,11 @@ corresponding metabolites into four groups according to the type of boundary
 (upper or lower) and sign of the significance coefficient (PRCC). Number of
 reactions in each group for $\Delta trpB$ is shown in the Supplementary Table \ref{tab:trpB_int_fq}.
 
-Metabolites, which exchange reaction lower or upper boundary has positive sensitivity coefficient, 
+Metabolites, which exchange reaction lower or upper boundary have a positive sensitivity coefficient, 
 we will call substrates and products correspondingly. Substrates and products for the
 $\Delta trpB$ model shown in Supplementary Tables \ref{tab:SubsTrpB10} and \ref{tab:ProdsTrpB10}.
 
-Metabolites, which exchange reaction lower or upper boundary has negative sensitivity coefficient, 
+Metabolites, which exchange reaction lower or upper boundary have a negative sensitivity coefficient, 
 we will call repellents and attractants correspondingly. Repellents and attractants for the
 $\Delta trpB$ model shown in Supplementary Tables \ref{tab:RepsTrpB10} and \ref{tab:AttrsTrpB10}.
 
@@ -1376,7 +1326,20 @@ printTable(repTbl10[order(pval,original)], digits = 5,
 ```
 
 # Sensome Intersections
-```{r upset.plot}
+Supplementary Figures \ref{fig:upsetSens} and \ref{fig:vennSens} show how fluxes
+that significantly influences biomass production distributed among different model
+as UpSet plot [@Lex:2014UpSet; @Conway:2017UpSetR] and Venn diagram respectively.
+It could be seen that majority of sensitive fluxes are common for all models,
+fluxes, which are significantly influences biomass production not in all models,
+listed in the Supplementary Table \ref{tab:upset_flx}. Most of metabolites listed
+in the Supplementary Table \ref{tab:upset_flx} related to Drug metabolism, but
+two things could be noticed: (i) the $\Delta hisD$ model is not sensitive to 
+outflux of 2-Oxobutanoate unlike all other three models, and (ii) 
+the $\Delta trpB$ is sensitive to influx of D-glucito and outflux of the Tiamin
+apart from expected influx of L-tryptophan.
+
+
+```{r upset.plot, fig.width=8,fig.height=8,fig.cap="\\label{fig:upsetSens} UpSet representation of intersection of sets of fluxes, for which PRCC different from zero at the significance level of 10% in different models: wt -- the wild-type model, hisD -- the $\\Delta hisD$ model, hisD2 -- the $\\Delta hisD$ model with blocked AlaHis assimilation, trpB -- the $\\Delta trpB$ model."}
 upsetinput<-list(wt=dfw$varname[dfw$pval.wt<0.10],
                  hisD=dfw$varname[dfw$pval.hisD<0.1],
                  hisD2=dfw$varname[dfw$pval.hisD2<0.1],
@@ -1384,96 +1347,33 @@ upsetinput<-list(wt=dfw$varname[dfw$pval.wt<0.10],
 upset(fromList(upsetinput))
 ```
 
-```{r venn.plot,fig.width=6,fig.height=6}
-gplots::venn(upsetinput)
+```{r venn.plot, fig.width=8,fig.height=8,fig.cap="\\label{fig:vennSens} Venn plot of sets of fluxes, for which PRCC different from zero at the significance level of 10% in different models: wt -- the wild-type model, hisD -- the $\\Delta hisD$ model, hisD2 -- the $\\Delta hisD$ model with blocked AlaHis assimilation, trpB -- the $\\Delta trpB$ model."}
+vn<-gplots::venn(upsetinput)
 ```
 
-# Unique flux intersections
-```{r uflux.upset}
-ufluxUpset<-list(wt=dfw$varname[dfw$card.wt==1],
-                 hisD=dfw$varname[dfw$card.hisD==1],
-                 hisD2=dfw$varname[dfw$card.hisD2==1],
-                 trpB=dfw$varname[dfw$card.trpB==1])
-upset(fromList(ufluxUpset))
+```{r uncommon.sensitive.fluxes}
+ints<-attr(vn,'intersections')
+df1<-dfw[match(ints$`wt:hisD:trpB`,df$varname),c("MetID","varname","Name","ExEquation")]
+df1$Group<-'wt:hisD:trpB'
+df2<-dfw[match(ints$`wt:hisD2:trpB`,df$varname),c("MetID","varname","Name","ExEquation")]
+df2$Group<-'wt:hisD2:trpB'
+df3<-dfw[match(ints$trpB,df$varname),c("MetID","varname","Name","ExEquation")]
+df3$Group<-'trpB'
+df4<-dfw[match(ints$hisD2,df$varname),c("MetID","varname","Name","ExEquation")]
+df4$Group<-'hisD2'
+intsDF<-rbind(df1,df2,df3,df4)[,c('Group',"MetID","varname","Name","ExEquation")]
+pander(intsDF,
+       caption=paste('\\label{tab:upset_flx} Sets of fluxes, for which PRCC ',
+                     'different from zero at the significance level of 10% ',
+                     'not in all models. Model names: wt -- the wild-type model, ',
+                     'hisD -- the $\\Delta hisD$ model, hisD2 -- the $\\Delta hisD$ ',
+                     'model with blocked AlaHis assimilation, trpB -- the ',
+                     '$\\Delta trpB$ model.'))
 ```
 
-```{r uflux.venn,fig.height=6,fig.width=6}
-gplots::venn(ufluxUpset)
-```
 
-# Combined all models tables
+# Bidirectional metabolites
 
-```{r filter.df}
-df10<-dfAll[pval<0.1]
-df5<-df10[pval<0.05]
-df1<-df5[pval<0.01]
-df<-dfAll
-```
-```{r plot.originals.hisD}
-qplot(original.wt,original.wt-original.hisD,data = dfw)+
-    xlab('PRCC wild type')+
-    ggtitle('Variation of PRCC values between wild type and hisD')
-```
-```{r plot.originals.hisD2}
-qplot(original.wt,original.wt-original.hisD2,data = dfw)+
-    xlab('PRCC wild type')+
-    ggtitle('Variation of PRCC values between wild type and hisD  no AlaHis transport')
-```
-
-```{r plot.originals.trpB}
-qplot(original.wt,original.wt-original.trpB,data = dfw)+
-    xlab('PRCC wild type')+
-    ggtitle('Variation of PRCC values between wild type and trpB')
-```
-
-```{r plot.pvals.hisD}
-qplot(pval.wt,pval.wt-pval.hisD,data = dfw)+
-    xlab('PRCC wild type')+
-    ggtitle('Variation of PRCC values between wild type and hisD')
-```
-
-```{r plot.pvals.hisD2}
-qplot(pval.wt,pval.wt-pval.hisD,data = dfw)+
-    xlab('PRCC wild type')+
-    ggtitle('Variation of PRCC values between wild type and hisD  no AlaHis transport')
-```
-
-```{r plot.pvals.trpB}
-qplot(pval.wt,pval.wt-pval.trpB,data = dfw)+
-    xlab('PRCC wild type')+
-    ggtitle('Variation of PRCC values between wild type and trpB')
-```
-
-```{r sig.fluxes.table,results='asis'}
-tdf<-df[,.(Nf100=length(unique(varname)),
-           Nm100=length(unique(MetID)),
-           Nsc100=length(which(card==1))),
-        by=.(Strain)]
-tdf10<-df10[,.(Nf10=length(unique(varname)),
-               Nm10=length(unique(MetID)),
-               Nsc10=length(which(card==1))),
-            by=.(Strain)]
-tdf5<-df5[,.(Nf5=length(unique(varname)),
-             Nm5=length(unique(MetID)),
-             Nsc5=length(which(card==1))),
-          by=.(Strain)]
-tdf1<-df1[,.(Nf1=length(unique(varname)),
-             Nm1=length(unique(MetID)),
-             Nsc1=length(which(card==1))),
-          by=.(Strain)]
-ftdf<-merge(merge(merge(tdf,tdf10,by='Strain'),
-                  tdf5,by='Strain'),
-            tdf1,by='Strain')
-```
-
-```{r print.sig.fluxes.table,results='asis',cache=FALSE,eval=FALSE}
-#names(ftdf)<-c('Strain','N_100','N_10','N_5','N_1')
-printTable(ftdf[order(ftdf$Nf100,decreasing = TRUE),],
-           main = 'Number of Fluxes at various significance levels',
-           landscape = TRUE,align = alFlMet)
-```
-
-## Bidirectional metabolites
 ```{r bidir.met.p10}
 mdf10<-df10[,.(N=length(unique(varname))),by=.(Strain,MetID,Name)][N>1]
 fmdf10<-merge(mdf10,df10,by=c('Strain','MetID','Name'))
@@ -1497,6 +1397,42 @@ printTable(metCar[order(metCar$N,decreasing = TRUE),],
 
 ```
 
+### Glycerol 3-phosphate
+```{r glyc3p.activity.wt}
+t<-as.data.frame(table(dtWT64$`actEX_glyc3p(e)_l`,dtWT64$`actEX_glyc3p(e)_u`))
+names(t)<-c('Lower bound active','Upper bound active','Count')
+levels(t$`Lower bound active`)<-c('No','Yes')
+levels(t$`Upper bound active`)<-c('No','Yes')
+t$Percent<-t$Count*100/nrow(dtWT64)
+pander(t,
+       caption=paste('\\label{tab:glyc3p_cnt} Fractions of Sobol points groupped according to',
+                     'Glycerol 3-phosphate lower and upper bound activity'))
+```
+
+### Succinate
+```{r succ.activity.wt}
+t<-as.data.frame(table(dtWT64$`actEX_succ(e)_l`,dtWT64$`actEX_succ(e)_u`))
+names(t)<-c('Lower bound active','Upper bound active','Count')
+levels(t$`Lower bound active`)<-c('No','Yes')
+levels(t$`Upper bound active`)<-c('No','Yes')
+t$Percent<-t$Count*100/nrow(dtWT64)
+pander(t,
+       caption=paste('\\label{tab:succ_cnt} Fractions of Sobol points groupped according to',
+                     'Succinate lower and upper bound activity'))
+```
+
+### Trimethylamine N-oxide
+```{r tmao.activity.wt}
+t<-as.data.frame(table(dtWT64$`actEX_tmao(e)_l`,dtWT64$`actEX_tmao(e)_u`))
+names(t)<-c('Lower bound active','Upper bound active','Count')
+levels(t$`Lower bound active`)<-c('No','Yes')
+levels(t$`Upper bound active`)<-c('No','Yes')
+t$Percent<-t$Count*100/nrow(dtWT64)
+pander(t,
+       caption=paste('\\label{tab:succ_cnt} Fractions of Sobol points groupped according to',
+                     'Trimethylamine N-oxide lower and upper bound activity'))
+```
+
 ## Interaction type table for all three models
 ```{r interaction.types}
 prnTbl<-dfw[(card.wt>1)|(card.hisD>1)|(card.trpB>1),
@@ -1506,112 +1442,20 @@ prnTbl<-dfw[(card.wt>1)|(card.hisD>1)|(card.trpB>1),
               grep('card',names(dfw)),
               grep('Name',names(dfw))),with=FALSE]
 prnTbl10<-prnTbl[(pval.wt<=0.1)]
-pander(table(sign(prnTbl10$original.wt),sub('.+_(.+)$','\\1',prnTbl10$varname)))
+writeExcel<-!file.exists(excelFileName)
+pander(table(sign(prnTbl10$original.wt),sub('.+_(.+)$','\\1',prnTbl10$varname)),
+       caption = '\\label{tab:all_int_fq} Aggregated sign/bound frequency table for all models')
 ```
 
-## Substrate table fo all three models
-```{r prepare.substr.table}
+```{r write.excel,eval=writeExcel}
 subTbl<-prnTbl[grepl('.+_l$',varname)&((original.wt>0)|(original.hisD>0)|(original.trpB>0))]
-subTbl10<-subTbl[(pval.wt<=0.1)|(pval.hisD<=0.1)|(pval.trpB<=0.1)]
-```
-
-```{r substr10.met.car.table,results='asis',cache=FALSE}
-printTable(subTbl10[order(pval.wt,-1*original.wt)], digits = 5,
-           main = 'All models significant substrates',
-           landscape = TRUE,align = alEdges,
-           label = 'tab:all_subs_met_p10')
-```
-
-```{r substr.met.car.table,results='asis',cache=FALSE}
-printTable(subTbl[order(pval.wt,-1*original.wt)], digits = 5,
-           main = 'All models substrates',
-           landscape = TRUE,align = alEdges,
-           label = 'tab:all_subs_met_full')
-```
-
-## Product table for all models
-```{r prepare.prd.table}
 prdTbl<-prnTbl[grepl('.+_u$',varname)&((original.wt>0)|(original.hisD>0)|(original.trpB>0))]
-prdTbl10<-prdTbl[(pval.wt<=0.1)|(pval.hisD<=0.1)|(pval.trpB<=0.1)]
-```
-
-```{r prd10.met.car.table,results='asis',cache=FALSE}
-printTable(prdTbl10[order(pval.wt,-1*original.wt)], digits = 5,
-           main = 'All models significant products',
-           landscape = TRUE,align = alEdges,
-           label = 'tab:all_prds_met_p10')
-```
-
-```{r prd.met.car.table,results='asis',cache=FALSE}
-printTable(prdTbl[order(pval.wt,-1*original.wt)], digits = 5,
-           main = 'All models products',
-           landscape = TRUE,align = alEdges,
-           label = 'tab:all_prds_met_full')
-```
-
-## Attranctant table for all models
-```{r prepare.attr.table}
 attrTbl<-prnTbl[grepl('.+_u$',varname)&((original.wt<0)|(original.hisD<0)|(original.trpB<0))]
-attrTbl10<-attrTbl[(pval.wt<=0.1)|(pval.hisD<=0.1)|(pval.trpB<=0.1)]
-```
-
-```{r attr10.met.car.table,results='asis',cache=FALSE}
-printTable(attrTbl10[order(pval.wt,original.wt)], digits = 5,
-           main = 'All models significant attractants',
-           landscape = TRUE,align = alEdges,
-           label = 'tab:all_attrs_met_p10')
-```
-
-
-```{r attr.met.car.table,results='asis',cache=FALSE}
-printTable(attrTbl[order(pval.wt,original.wt)], digits = 5,
-           main = 'All models attractants',
-           landscape = TRUE,align = alEdges,
-           label = 'tab:all_attrs_met_full')
-```
-
-## Repellent table for all models
-```{r prepare.rep.table}
 repTbl<-prnTbl[grepl('.+_l$',varname)&((original.wt<0)|(original.hisD<0)|(original.trpB<0))]
-repTbl10<-repTbl[(pval.wt<=0.1)|(pval.hisD<=0.1)|(pval.trpB<=0.1)]
+l<-list(Substrates=subTbl,Products=prdTbl,Attractants=attrTbl,Repellents=repTbl)
+write.xlsx(l, file = excelFileName)
 ```
 
-```{r rep10.met.car.table,results='asis',cache=FALSE}
-printTable(repTbl10[order(pval.wt,original.wt)], digits = 5,
-           main = 'All models significant repellents',
-           landscape = TRUE,align = alEdges,
-           label = 'tab:all_reps_met_p10')
-```
-
-```{r rep.met.car.table,results='asis',cache=FALSE}
-printTable(repTbl[order(pval.wt,original.wt)], digits = 5,
-           main = 'All models repellents',
-           landscape = TRUE,align = alEdges,
-           label = 'tab:all_reps_met_full')
-```
-
-
-# Glycerol 3-phosphate
-```
-{r check.bound.activity.wt}
-pander(table(dtWT64$`actEX_glyc3p(e)_l`,dtWT64$`actEX_glyc3p(e)_u`),caption='Counts')
-pander(table(dtWT64$`actEX_glyc3p(e)_l`,dtWT64$`actEX_glyc3p(e)_u`)*100/nrow(dtWT64),caption='Percentage')
-```
-```
-{r prepare.data.table.glyc3p}
-dt<-dtWT64[,grep('glyc3p',names(dtWT64)),with=FALSE]
-#names(dt)<-paste0('act_',names(dt))
-dt$group=paste0(dtWT64$`actEX_glyc3p(e)_l`,dtWT64$`actEX_glyc3p(e)_u`)
-dfluxWT64glyc3p<-dfluxWT64[,grep('(glyc3p|Solution)',colnames(dfluxWT64)),with=FALSE]
-
-dtglyc3p<-cbind(dfluxWT64glyc3p,dt)
-```
-
-```
-{r glyc3p.densplot}
-p<-ggplot(dtglyc3p,aes(x=`EX_glyc3p(e)_fl`,color=group))+geom_density()
-p+theme_bw()
-```
 
 # References
 
