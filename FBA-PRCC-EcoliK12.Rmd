@@ -7,6 +7,7 @@ output:
     keep_tex: yes
     number_sections: yes
     toc: yes
+    toc_depth: 4
     extra_dependencies: ["flafter"]
   word_document: default
   html_document: default
@@ -37,15 +38,9 @@ library(tidyr)
 library(dplyr)
 library(openxlsx)
 library(sensitivity)
-library(igraph)
-library(BioNAR)
 library(UpSetR)
-library(GGally)
 library(ODEsensitivity)
 library(RColorBrewer)
-defDir<-'/Volumes/bucket/GoryaninU/FBA_sensitivity/AGORA2_sobol_no_biomass'
-#cmurl<-'https://raw.githubusercontent.com/tibbdc/GraphCM/main/data/external/'
-cmurl<-'data/'
 ```
 
 ```{r setup, include=FALSE, cache=FALSE}
@@ -101,36 +96,6 @@ signifPRCC<-function(prcc1,prcc2,N1,N2){
     p2<-length(prcc2)-1
     
     z<-(normPRCC(prcc1)-normPRCC(prcc2))/sqrt(1/(N1-3-p1) + 1/(N2-3-p2))
-}
-
-#' Collect edges connecting pair of currencies and reaction which they both
-#' participate in.
-#'
-#' @param g graph 
-#' @param p pair of currencies
-#'
-#' @return list of character edge identifiers
-#'
-#' @examples
-cleanPairCurrencies<-function(p,g){
-    if(length(p)==2 & all(!is.na(match(p,V(g)$name)))){
-        fre1<-neighbors(g,p[1],mode = 'out')
-        fre2<-neighbors(g,p[2],mode = 'in')
-        fr<-V(g)$name[intersect(fre1,fre2)]
-        tre1<-neighbors(g,p[1],mode = 'in')
-        tre2<-neighbors(g,p[2],mode = 'out')
-        tr<-V(g)$name[intersect(tre1,tre2)]
-        edges<-c()
-        if(length(fr)>0){
-            edges<-c(edges,paste0(p[1],'|',fr),paste0(fr,'|',p[2]))
-        }
-        if(length(tr)>0){
-            edges<-c(edges,paste0(p[2],'|',tr),paste0(tr,'|',p[1]))
-        }
-        return(edges)
-    }else{
-        return(c())
-    }
 }
 
 printTable <-
@@ -329,239 +294,9 @@ alEdges<- paste0('|p{0.01\\textwidth}',#ID '|l',#
 #           '|p{0.15\\textwidth}',                #Reactome.wt 
            '|p{0.15\\textwidth}|'                #PubChem.wt 
 )
+excelFileName<-"FBA-PRCC-EcoliK12.xlsx"
 ```
-
-# Build graph
-
-Reaction and metabolite data were extracted from pyCobra model together with
-Consumption-Production edges and stored in the Excel file. We also took 
-currency metabolites lists from the [GitHub repository](`r cmurl`)in the 
-separate table. The following chunk loads the data:
-
-```{r read.data}
-nodes<-read.xlsx('SupplementaryData.xlsx',sheet = 'Table S3')
-nodes$shape<-ifelse(nodes$Type=='metabolite','circle','square')
-edges<-read.xlsx('SupplementaryData.xlsx',sheet = 'Table S4')
-pairCurr<-read.csv(paste0(cmurl,'pairs_of_currency_metabolites.csv'))
-specCurr<-read.csv(paste0(cmurl,'special_currency_metabolites.csv'))
-specCurr$excluded[8:10]<-c('coa[c]','coa[p]','coa[e]')
-```
-
-To take into account reversibility of reaction, each reversible reaction is
-split into two forward and reversed reaction nodes:
-
-```{r prepare.reversible.reaction.nodes}
-revidx<-grep('<=>',nodes$Description)
-rev_re<-nodes[revidx,]
-rev_re$ID<-paste0(rev_re$ID,'_rev')
-fnodes<-rbind(nodes,rev_re)
-```
-
-Edges connecting reversible reactions are duplicated and reversed as well:
-```{r prepare.reversible.reaction.edges}
-ed_rev_from<-edges[edges$From %in% nodes$ID[revidx],]
-ed_rev_from<-ed_rev_from[,c(2,1,3:4)]
-names(ed_rev_from)<-names(edges)
-ed_rev_from$To<-paste0(ed_rev_from$To,'_rev')
-ed_rev_to<-edges[edges$To %in% nodes$ID[revidx],]
-ed_rev_to<-ed_rev_to[,c(2,1,3:4)]
-names(ed_rev_to)<-names(edges)
-ed_rev_to$From<-paste0(ed_rev_to$From,'_rev')
-fedges<-rbind(edges,ed_rev_from,ed_rev_to)
-```
-
-Now we are ready to recreate model metabolic graph, but we have to clean 
-nodes corresponding to biomass production, macromolecule biosynthesis etc. 
-```{r build.graph}
-g<-graph_from_data_frame(fedges,directed = TRUE,vertices = fnodes)
-ex_names<-paste0('(biomass|dreplication|dnarep|pbiosynthesis|proteinsynth|',
-                 'rtranscription|rnatrans)')
-g<-delete_vertices(g,grep(ex_names,V(g)$name))
-```
-
-Finally we obtain the graph with `r vcount(g)` nodes and `r ecount(g)` edges. 
-There are `r length(which(V(g)$Type=='metabolite'))` nodes, which represents
-metabolites and `r length(which(V(g)$Type!='metabolite'))` nodes, which 
-represents reactions.
-
-## Whole graph weak components
-
-With metabolic graph at hand we can find weakly connected components and check
-their structure by calculating its bow-tie decomposition and marking nodes 
-accordingly [@Yang:Bowtie]:
-```{r analyze.global.components}
-cmp<-components(g,mode = 'weak')
-V(g)$glbComp<-cmp$membership
-g<-BioNAR::markBowTie(g)
-btdf<-makeMembership(g,'BowTie')
-l<-layoutByCluster(g,btdf)
-midx<-which.max(cmp$csize)
-ndf<-igraph::as_data_frame(g,what = 'vertices')
-ndf<-ndf[ndf$glbComp!=midx,]
-mndf<-ndf[ndf$Type=='metabolite',]
-rndf<-ndf[ndf$Type=='reaction'&!grepl('_rev$',ndf$name),]
-```
-
-```{r prepare.palette,eval=TRUE,include=FALSE,echo=FALSE}
-p<-brewer.pal(8, 'Dark2')
-names(p)<-c('IDR',"OUT","",'TU','IN','SCC','ODR','OTR')
-```
-
-Figure \ref{fig:g_bowtie} visualize bow-tie decomposition with automatic 
-cluster-based layout.
-```{r plot.global.graph.bowtie, fig.width=8,fig.height=8,fig.cap="\\label{fig:g_bowtie} Layout of the \\textit{E. coli} metabolic network according to its bow-tie decomposition."}
-ggnet2(g,mode=l,color='BowTie', color.palette = p)
-```
-
-```{r all.graph.components.reaction.table,results='asis',cache=FALSE, echo=TRUE}
-printTable(rndf[order(rndf$glbComp,rndf$Name),c(1:4,7)],
-           main='Reactions outside the main component in the full graph',
-           landscape = TRUE,align = alReCar,label='tab:glbCmpRe')
-```
-```{r all.graph.components.metabolites.table,results='asis',cache=FALSE, echo=TRUE}
-printTable(mndf[order(mndf$glbComp),c(1,2,7)],
-           main='Metabolites outside the main component in the full graph',
-           landscape = FALSE,align = alMetCar,label='tab:glbCmpMet')
-```
-
-There are `r cmp$no` disconnected componens in the graph, main one contains
-`r cmp$csize[midx]` nodes, covering `r round(100*cmp$csize[midx]/vcount(g),2)`% of the 
-graph nodes. Other `r cmp$no-1` components, which contains `r sum(cmp$csize[-midx])`
-vertices, represent mainly transport reactions
-describing cobalt, chloride and arsenic compounds exchange with the environment.
-All nodes in outside of the main connected component are groped into the blue 
-cluster on the Supplementary figure \ref{fig:g_bowtie}.
-Reactions and metabolites from those components are listed in the Supplementary 
-table \ref{tab:glbCmpRe} and the Supplementary table \ref{tab:glbCmpMet} correspondently.
-
-# Clean currency metabolites
-
-It is known that currency metabolites distort the graph structure severely, so
-for the following analysis we going to remove them, clean remaining singleton
-reactions and analyse the structure of the clean metabolic graph according to
-the algorithm described in [@Gao:2022graphtheorybased].
-
-```{r clean.currencies}
-curidx<-lapply(
-    sapply(as.list(specCurr),
-           function(.y){sub(pattern = '_(.+)$','[\\1]',.y)}), 
-    function(.x){
-        idx<-match(.x,V(g)$name)
-        return(idx[!is.na(idx)])
-        })
-gc<-delete_vertices(g,unlist(curidx))
-```
-
-```{r clean.pair.currencies}
-edges<-lapply(as.list(pairCurr),
-              function(.x){
-                  do.call(c,
-                          sapply(
-                              sapply(
-                                  strsplit(.x,','),
-                                  function(.y){
-                                      sub(pattern = '_(.+)$','[\\1]',.y)
-                                  }),
-                              cleanPairCurrencies,g=gc))
-              })
-
-gc<-delete_edges(gc,unlist(edges))
-```
-```{r clean.dungling.nodes}
-ccmp<-components(gc,mode = 'weak')
-gc<-delete_vertices(gc,which(ccmp$membership %in% which(ccmp$csize==1)))
-```
-
-After removal of the currency metabolites we obtain the graph with `r vcount(gc)` 
-nodes and `r ecount(gc)` edges by removing `r (vcount(g)-vcount(gc))` nodes and 
-`r (ecount(g)-ecount(gc))`. This graph consists of  
-`r length(which(V(gc)$Type=='metabolite'))` nodes, which represents
-metabolites, and `r length(which(V(gc)$Type!='metabolite'))` nodes, which 
-represents reactions.
-
-
-## Weak components
-
-Similar to the whole graph we going to find disconnected components and their composition:
-```{r clean.graph.components}
-ccmp<-components(gc,mode = 'weak')
-V(gc)$curComp<-ccmp$membership
-gc<-BioNAR::markBowTie(gc)
-midx<-which.max(ccmp$csize)
-btdf<-makeMembership(gc,'BowTie')
-l<-layoutByCluster(gc,btdf)
-#l<-readRDS('layouts/layout.28.rds')
-ndf<-igraph::as_data_frame(gc,what = 'vertices')
-ndf<-ndf[ndf$curComp!=midx,]
-mndf<-ndf[ndf$Type=='metabolite',]
-rndf<-ndf[ndf$Type=='reaction'&!grepl('_rev$',ndf$name),]
-```
-
-```{r plot.clean.graph.bowtie, fig.width=8,fig.height=8,fig.cap="\\label{fig:gc_bowtie} Layout of the \\textit{E. coli} metabolic network without currency metabolites according to its bow-tie decomposition."}
-ggnet2(gc,mode=l,color='BowTie', color.palette = p)
-```
-
-```{r clean.graph.components.reaction.table,results='asis',cache=FALSE,echo=TRUE}
-printTable(rndf[order(rndf$curComp,rndf$Name),c(1:4,7,8)],
-           main='Reactions outside the main component in the graph without currency metabolites',
-           landscape = TRUE,align = alReCarC,label='tab:clnCmpRe')
-```
-```{r clean.graph.components.metabolites.table,results='asis',cache=FALSE,echo=TRUE}
-printTable(mndf[order(mndf$curComp),c(1,2,7,8)],
-           main='Metabolites outside the main component in the graph without currency metabolites',
-           landscape = FALSE,align = alMetCarC,label='tab:clnCmpMet')
-```
-
-It could be seen that the number of disconnected components is higher in the clean 
-graph (`r ccmp$no` vs. `r cmp$no`). Disconnected components contain `r nrow(rndf)` reactions and 
-`r nrow(mndf)` metabolites. In the tables above (Supplementary Table \ref{tab:clnCmpRe} 
-and Supplementary Table \ref{tab:clnCmpMet}) columns `glbComp` and `curComp`
-show the the weak component ID in the whole and clean graphs correspondingly. 
-
-Bow-tie decomposition of the clean graph is shown on the Supplementary 
-Figure \ref{fig:gc_bowtie}. All nodes outside of the largest connected component
-are groupped into the blue cluster.
-
-## Subsystem Over-representation analysis
-
-To check if disconnected components represent particular functionality in the
-network we run enrichment analysis of Subsystems annotation terms within clean
-graph weak components:
-
-```{r clean.graph.ora}
-res<-clusterORA(gc, alg='curComp', name='Subsystem', vid='name')
-```
-
-The columns in the Supplementary Table S\ref{tab:SubsORA} are the following:
-
-* cl – cluster ID;
-* FL – name of the enriched term;
-* N – number vertices in the network;
-* Fn – number of vertices in the graph annotated by term `FL` ($F_n$);
-* Cn – size of the cluster;
-* Mu – number of vertices in the cluster annotated by term `FL` ($\mu$);
-* OR – odds ratio;
-* Fe – fold enrichment $F_e$;
-* Fc – fold enrichment $F_c$;
-* pval – an enrichment p-value from hypergeometric test;
-* padj – a BY-adjusted p-value;
-* palt – an depletion p-value from hypergeometric test;
-* paltadj – a BY-adjusted depletion p-value
-
-calculated by the BioNAR package [@McLean:2023BioNAR; @McLean:2023Computational; @Mclean:aa].
-
-```{r clean.graph.ora.table,results='asis',cache=FALSE}
-rr<-res[res$padj<=0.1,-c(1,9,10,17)]
-rr<-rr[rr$cl != midx,]
-rr$cl<-as.character(rr$cl)
-rr$N<-as.character(rr$N)
-rr$Fn<-as.character(rr$Fn)
-rr$Cn<-as.character(rr$Cn)
-rr$Mu<-as.character(rr$Mu)
-printTable(rr,
-           main='Subsystem over representations in side gcomponents',
-           landscape = TRUE,align = alORA,digits = -3,label='tab:SubsORA')
-```
+\pagebreak
 
 
 # FBA Sensitivity Analysis
@@ -605,6 +340,16 @@ df$LipidMaps["['NaN']"==df$LipidMaps]<-""
 df$MetaNetX["['NaN']"==df$MetaNetX]<-""
 df$Reactome["['NaN']"==df$Reactome]<-""
 df$PubChem["['NaN']"==df$PubChem]<-""
+df$HMDF[is.na(df$HMDF)]<-""
+df$ChEBI[is.na(df$ChEBI)]<-""
+df$InChI[is.na(df$InChI)]<-""
+df$KEGG[is.na(df$KEGG)]<-""
+df$SEED[is.na(df$SEED)]<-""
+df$BiGG[is.na(df$BiGG)]<-""
+df$LipidMaps[is.na(df$LipidMaps)]<-""
+df$MetaNetX[is.na(df$MetaNetX)]<-""
+df$Reactome[is.na(df$Reactome)]<-""
+df$PubChem[is.na(df$PubChem)]<-""
 df$HMDF <- gsub("(\\[|\\]|')",'',df$HMDF)
 df$ChEBI <- gsub("(\\[|\\]|')",'',df$ChEBI)
 df$InChI <- gsub("(\\[|\\]|')",'',df$InChI)
@@ -1019,6 +764,16 @@ df$LipidMaps["['NaN']"==df$LipidMaps]<-""
 df$MetaNetX["['NaN']"==df$MetaNetX]<-""
 df$Reactome["['NaN']"==df$Reactome]<-""
 df$PubChem["['NaN']"==df$PubChem]<-""
+df$HMDF[is.na(df$HMDF)]<-""
+df$ChEBI[is.na(df$ChEBI)]<-""
+df$InChI[is.na(df$InChI)]<-""
+df$KEGG[is.na(df$KEGG)]<-""
+df$SEED[is.na(df$SEED)]<-""
+df$BiGG[is.na(df$BiGG)]<-""
+df$LipidMaps[is.na(df$LipidMaps)]<-""
+df$MetaNetX[is.na(df$MetaNetX)]<-""
+df$Reactome[is.na(df$Reactome)]<-""
+df$PubChem[is.na(df$PubChem)]<-""
 df$HMDF <- gsub("(\\[|\\]|')",'',df$HMDF)
 df$ChEBI <- gsub("(\\[|\\]|')",'',df$ChEBI)
 df$InChI <- gsub("(\\[|\\]|')",'',df$InChI)
@@ -1138,7 +893,7 @@ subTbl10<-subTbl[(pval<=0.1)]
 
 ```{r substr10.met.car.table.hisD,results='asis',cache=FALSE}
 printTable(subTbl10[order(pval,-1*original)], digits = 5,
-           main = 'hisD substrates',
+           main = '$\\Delta hisD$ substrates',
            landscape = TRUE,align = alEdgesOne,
            label = 'tab:SubsHisD10')
 ```
@@ -1151,7 +906,7 @@ prdTbl10<-prdTbl[(pval<=0.1)]
 
 ```{r prd10.met.car.table.hisD,results='asis',cache=FALSE}
 printTable(prdTbl10[order(pval,-1*original)], digits = 5,
-           main = 'hisD products',
+           main = '$\\Delta hisD$ products',
            landscape = TRUE,align = alEdgesOne,
            label = 'tab:ProdsHisD10')
 ```
@@ -1164,7 +919,7 @@ attrTbl10<-attrTbl[(pval<=0.1)]
 
 ```{r attr10.met.car.table.hisD,results='asis',cache=FALSE}
 printTable(attrTbl10[order(pval,original)], digits = 5,
-           main = 'hisD attractants',
+           main = '$\\Delta hisD$ attractants',
            landscape = TRUE,align = alEdgesOne,
            label = 'tab:AttrsHisD10')
 ```
@@ -1177,7 +932,7 @@ repTbl10<-repTbl[(pval<=0.1)]
 
 ```{r rep10.met.car.table.hisD,results='asis',cache=FALSE}
 printTable(repTbl10[order(pval,original)], digits = 5,
-           main = 'hisD repellents',
+           main = '$\\Delta hisD$ repellents',
            landscape = TRUE,align = alEdgesOne,
            label = 'tab:RepsHisD10')
 ```
@@ -1216,6 +971,16 @@ df$LipidMaps["['NaN']"==df$LipidMaps]<-""
 df$MetaNetX["['NaN']"==df$MetaNetX]<-""
 df$Reactome["['NaN']"==df$Reactome]<-""
 df$PubChem["['NaN']"==df$PubChem]<-""
+df$HMDF[is.na(df$HMDF)]<-""
+df$ChEBI[is.na(df$ChEBI)]<-""
+df$InChI[is.na(df$InChI)]<-""
+df$KEGG[is.na(df$KEGG)]<-""
+df$SEED[is.na(df$SEED)]<-""
+df$BiGG[is.na(df$BiGG)]<-""
+df$LipidMaps[is.na(df$LipidMaps)]<-""
+df$MetaNetX[is.na(df$MetaNetX)]<-""
+df$Reactome[is.na(df$Reactome)]<-""
+df$PubChem[is.na(df$PubChem)]<-""
 df$HMDF <- gsub("(\\[|\\]|')",'',df$HMDF)
 df$ChEBI <- gsub("(\\[|\\]|')",'',df$ChEBI)
 df$InChI <- gsub("(\\[|\\]|')",'',df$InChI)
@@ -1348,7 +1113,7 @@ subTbl10<-subTbl[(pval<=0.1)]
 
 ```{r substr10.met.car.table.hisD.noalahis,results='asis',cache=FALSE}
 printTable(subTbl10[order(pval,-1*original)], digits = 5,
-           main = 'hisD substrates',
+           main = '$\\Delta hisD$ substrates',
            landscape = TRUE,
            #align = 'llllll',
            align = alEdgesOne,
@@ -1363,7 +1128,7 @@ prdTbl10<-prdTbl[(pval<=0.1)]
 
 ```{r prd10.met.car.table.hisD.noalahis,results='asis',cache=FALSE}
 printTable(prdTbl10[order(pval,-1*original)], digits = 5,
-           main = 'hisD products',
+           main = '$\\Delta hisD$ model products',
            landscape = TRUE,
            #align = 'llllll',
            align = alEdgesOne,
@@ -1378,7 +1143,7 @@ attrTbl10<-attrTbl[(pval<=0.1)]
 
 ```{r attr10.met.car.table.hisD.noalahis,results='asis',cache=FALSE}
 printTable(attrTbl10[order(pval,original)], digits = 5,
-           main = 'hisD attractants',
+           main = '$\\Delta hisD$ model attractants',
            landscape = TRUE,
            #align = 'llllll',
            align = alEdgesOne,
@@ -1393,7 +1158,7 @@ repTbl10<-repTbl[(pval<=0.1)]
 
 ```{r rep10.met.car.table.hisD.noalahis,results='asis',cache=FALSE}
 printTable(repTbl10[order(pval,original)], digits = 5,
-           main = 'hisD repellents',
+           main = '$\\Delta hisD$ model repellents',
            landscape = TRUE,
            #align = 'llllll',#
            align = alEdgesOne,
@@ -1435,6 +1200,16 @@ df$LipidMaps["['NaN']"==df$LipidMaps]<-""
 df$MetaNetX["['NaN']"==df$MetaNetX]<-""
 df$Reactome["['NaN']"==df$Reactome]<-""
 df$PubChem["['NaN']"==df$PubChem]<-""
+df$HMDF[is.na(df$HMDF)]<-""
+df$ChEBI[is.na(df$ChEBI)]<-""
+df$InChI[is.na(df$InChI)]<-""
+df$KEGG[is.na(df$KEGG)]<-""
+df$SEED[is.na(df$SEED)]<-""
+df$BiGG[is.na(df$BiGG)]<-""
+df$LipidMaps[is.na(df$LipidMaps)]<-""
+df$MetaNetX[is.na(df$MetaNetX)]<-""
+df$Reactome[is.na(df$Reactome)]<-""
+df$PubChem[is.na(df$PubChem)]<-""
 df$HMDF <- gsub("(\\[|\\]|')",'',df$HMDF)
 df$ChEBI <- gsub("(\\[|\\]|')",'',df$ChEBI)
 df$InChI <- gsub("(\\[|\\]|')",'',df$InChI)
@@ -1556,7 +1331,7 @@ subTbl10<-subTbl[(pval<=0.1)]
 
 ```{r substr10.met.car.table.trpB,results='asis',cache=FALSE}
 printTable(subTbl10[order(pval,-1*original)], digits = 5,
-           main = 'trpB substrates',
+           main = '$\\Delta trpB$ model substrates',
            landscape = TRUE,align = alEdgesOne,
            label = 'tab:SubsTrpB10')
 ```
@@ -1569,7 +1344,7 @@ prdTbl10<-prdTbl[(pval<=0.1)]
 
 ```{r prd10.met.car.table.trpB,results='asis',cache=FALSE}
 printTable(prdTbl10[order(pval,-1*original)], digits = 5,
-           main = 'trpB products',
+           main = '$\\Delta trpB$ model products',
            landscape = TRUE,align = alEdgesOne,
            label = 'tab:ProdsTrpB10')
 ```
@@ -1582,7 +1357,7 @@ attrTbl10<-attrTbl[(pval<=0.1)]
 
 ```{r attr10.met.car.table.trpB,results='asis',cache=FALSE}
 printTable(attrTbl10[order(pval,original)], digits = 5,
-           main = 'trpB attractants',
+           main = '$\\Delta trpB$ model attractants',
            landscape = TRUE,align = alEdgesOne,
            label = 'tab:AttrsTrpB10')
 ```
@@ -1595,7 +1370,7 @@ repTbl10<-repTbl[(pval<=0.1)]
 
 ```{r rep10.met.car.table.trpB,results='asis',cache=FALSE}
 printTable(repTbl10[order(pval,original)], digits = 5,
-           main = 'trpB repellents',
+           main = '$\\Delta trpB$ model repellents',
            landscape = TRUE,align = alEdgesOne,
            label = 'tab:RepsTrpB10')
 ```
@@ -1842,6 +1617,7 @@ p+theme_bw()
 
 <div id="refs"></div>
 
+\pagebreak
 
 # Appendix {.tabset}
 ## Functions
