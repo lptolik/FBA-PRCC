@@ -154,20 +154,6 @@ printTable <-
     }
   }
 ##==================== Layouts ====================##
-alReCar<-paste0('|l',
-                 '|p{0.25\\textwidth}',#ID
-           '|p{0.29\\textwidth}',#Name
-           '|p{0.39\\textwidth}',#Description
-           '|p{0.15\\textwidth}',#Subsystem
-#           '|l',                #Type
-#           '|r',                #glbComu
-#           '|r',                #Nflux5
-#           '|r',                #Nflux5
-#           '|r',                #Nflux5
-#           '|r',                #Nflux5
-           '|r|'                 #,curComp
-)
-
 alMetCarF<-paste0('|l',#'|p{0.01\\textwidth}',#ID
            '|p{0.15\\textwidth}',#MetID
            '|p{0.35\\textwidth}',#Name
@@ -180,80 +166,6 @@ alMetCarF<-paste0('|l',#'|p{0.01\\textwidth}',#ID
            '|r|'                 #,N
 )
 
-alMetCar<-paste0('|l',
-                 '|p{0.25\\textwidth}',#ID
-           '|p{0.39\\textwidth}',#Name
-#           '|p{0.15\\textwidth}',#Subsystem
-#           '|l',                #Type
-#           '|r',                #glbComu
-#           '|r',                #Nflux5
-#           '|r',                #Nflux5
-#           '|r',                #Nflux5
-#           '|r',                #Nflux5
-           '|r|'                 #,curComp
-)
-
-alReCarC<-paste0('|l',
-                 '|p{0.25\\textwidth}',#ID
-           '|p{0.29\\textwidth}',#Name
-           '|p{0.39\\textwidth}',#Description
-           '|p{0.15\\textwidth}',#Subsystem
-#           '|l',                #Type
-           '|r',                #glbComu
-#           '|r',                #Nflux5
-#           '|r',                #Nflux5
-#           '|r',                #Nflux5
-#           '|r',                #Nflux5
-           '|r|'                 #,curComp
-)
-
-alMetCarC<-paste0('|l',
-                 '|p{0.25\\textwidth}',#ID
-           '|p{0.39\\textwidth}',#Name
-#           '|p{0.15\\textwidth}',#Subsystem
-#           '|l',                #Type
-           '|r',                #glbComu
-#           '|r',                #Nflux5
-#           '|r',                #Nflux5
-#           '|r',                #Nflux5
-#           '|r',                #Nflux5
-           '|r|'                 #,curComp
-)
-
-alClSum<-paste0('|p{0.1\\textwidth}',#algorithm
-           '|r',                #N
-           '|r',                #mod
-           '|r',                #C
-           '|r',                #Cn1
-           '|r',                #Cn100
-           '|r',                #mu
-           '|r',                #Min
-           '|r',                #1Q
-           '|r',                #Median
-           '|r',                #Mean
-           '|r',                #3Q
-           '|r|'                 #Max
-)
-
-alORA<-paste0('|p{0.01\\textwidth}',
-#           '|l',                #alg
-           '|r',                #cl
-#           '|r',                #FL
-           '|p{0.15\\textwidth}',#FL
-           '|r',                #N
-           '|r',                #Fn
-           '|r',                #Cn
-           '|r',                #Mu
-           '|r',                #OR
-#           '|r',                #CIl
-#           '|r',                #CIu
-           '|r',                #Fe
-           '|r',                #Fc
-           '|r',                #pval
-           '|r',                #padj
-           '|r',                #palt
-           '|r|'                #paltadj
-)
 alEdgesOne<- paste0('|p{0.01\\textwidth}',#ID '|l',#
            '|p{0.15\\textwidth}',                #varname 
            '|p{0.15\\textwidth}',                #MetID.wt 
@@ -266,34 +178,6 @@ alEdgesOne<- paste0('|p{0.01\\textwidth}',#ID '|l',#
            '|p{0.15\\textwidth}|'                #Name 
 )
 
-alEdges<- paste0('|p{0.01\\textwidth}',#ID '|l',#
-           '|p{0.15\\textwidth}',                #varname 
-           '|p{0.15\\textwidth}',                #MetID.wt 
-           '|r',                #original.wt 
-           '|r',                #pval.wt 
-           '|r',                #original.hisD 
-           '|r',                #pval.hisD 
-           '|r',                #original.hisD2 
-           '|r',                #pval.hisD2 
-           '|r',                #original.trpB 
-           '|r',                #pval.trpB 
-           '|r',                #card.wt 
-           '|r',                #card.hisD
-           '|r',                #card.hisD2
-           '|r',                #card.trpB 
-#           '|p{0.15\\textwidth}',                #Name.wt 
-#           '|p{0.15\\textwidth}',                #HMDF.wt 
-#           '|p{0.15\\textwidth}',                #ChEBI.wt 
-#           '|p{0.15\\textwidth}',                #InChI.wt 
-#           '|p{0.15\\textwidth}',                #SMILES.wt 
-#           '|p{0.15\\textwidth}',                #KEGG.wt 
-#           '|p{0.15\\textwidth}',                #SEED.wt 
-#           '|p{0.15\\textwidth}',                #BiGG.wt 
-#           '|p{0.15\\textwidth}',                #LipidMaps.wt 
-#           '|p{0.15\\textwidth}',                #MetaNetX.wt 
-#           '|p{0.15\\textwidth}',                #Reactome.wt 
-           '|p{0.15\\textwidth}|'                #PubChem.wt 
-)
 excelFileName<-"FBA-PRCC-EcoliK12.xlsx"
 ```
 \pagebreak
@@ -1374,6 +1258,11 @@ pander(intsDF,
 
 # Bidirectional metabolites
 
+```{r filter.df}
+df10<-dfAll[pval<0.1]
+df<-dfAll
+```
+
 ```{r bidir.met.p10}
 mdf10<-df10[,.(N=length(unique(varname))),by=.(Strain,MetID,Name)][N>1]
 fmdf10<-merge(mdf10,df10,by=c('Strain','MetID','Name'))
@@ -1456,6 +1345,7 @@ l<-list(Substrates=subTbl,Products=prdTbl,Attractants=attrTbl,Repellents=repTbl)
 write.xlsx(l, file = excelFileName)
 ```
 
+\pagebreak
 
 # References
 
