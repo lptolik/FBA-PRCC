@@ -178,6 +178,21 @@ alEdgesOne<- paste0('|p{0.01\\textwidth}',#ID '|l',#
            '|p{0.15\\textwidth}|'                #Name 
 )
 
+alFlOutl<- paste0('|p{0.01\\textwidth}',#ID '|l',#
+           '|p{0.35\\textwidth}',                #Strain 
+           '|p{0.15\\textwidth}',                #MetID 
+           '|r',                #N 
+           '|r',                #Nr
+           '|r',                #Nucard 
+           '|r',                #Nmcard 
+           '|r',                #Nsrange 
+           '|r',                #Nlrange 
+           '|r',                #Nactive
+           '|r',                #Ninactive 
+           '|r',                #Nsig
+           '|r|'                #Nnonsig
+)
+
 excelFileName<-"FBA-PRCC-EcoliK12.xlsx"
 ```
 \pagebreak
@@ -984,7 +999,7 @@ subTbl10<-subTbl[(pval<=0.1)]
 
 ```{r substr10.met.car.table.hisD.noalahis,results='asis',cache=FALSE}
 printTable(subTbl10[order(pval,-1*original)], digits = 5,
-           main = '$\\Delta hisD$ substrates',
+           main = 'Substrates for the $\\Delta hisD$ model with blocked AlaHis assimilation',
            landscape = TRUE,
            #align = 'llllll',
            align = alEdgesOne,
@@ -999,7 +1014,7 @@ prdTbl10<-prdTbl[(pval<=0.1)]
 
 ```{r prd10.met.car.table.hisD.noalahis,results='asis',cache=FALSE}
 printTable(prdTbl10[order(pval,-1*original)], digits = 5,
-           main = '$\\Delta hisD$ model products',
+           main = 'Products for the $\\Delta hisD$ model with blocked AlaHis assimilation',
            landscape = TRUE,
            #align = 'llllll',
            align = alEdgesOne,
@@ -1014,7 +1029,7 @@ attrTbl10<-attrTbl[(pval<=0.1)]
 
 ```{r attr10.met.car.table.hisD.noalahis,results='asis',cache=FALSE}
 printTable(attrTbl10[order(pval,original)], digits = 5,
-           main = '$\\Delta hisD$ model attractants',
+           main = 'Attractants for the $\\Delta hisD$ model with blocked AlaHis assimilation',
            landscape = TRUE,
            #align = 'llllll',
            align = alEdgesOne,
@@ -1029,7 +1044,7 @@ repTbl10<-repTbl[(pval<=0.1)]
 
 ```{r rep10.met.car.table.hisD.noalahis,results='asis',cache=FALSE}
 printTable(repTbl10[order(pval,original)], digits = 5,
-           main = '$\\Delta hisD$ model repellents',
+           main = 'Repellents for the $\\Delta hisD$ model with blocked AlaHis assimilation',
            landscape = TRUE,
            #align = 'llllll',#
            align = alEdgesOne,
@@ -1151,7 +1166,7 @@ we will call repellents and attractants correspondingly. Repellents and attracta
 $\Delta trpB$ model shown in Supplementary Tables \ref{tab:RepsTrpB10} and \ref{tab:AttrsTrpB10}.
 
 ```{r interaction.types.trpB}
-prnTbl<-df[(card>1),c(1:3,6,31,32,34,36,8)]
+prnTbl<-df[(card>1),c(1:3,6,32,33,35,37,8)]
 prnTbl10<-prnTbl[(pval<=0.1)]
 pander(table(sign(prnTbl10$original),sub('.+_(.+)$','\\1',prnTbl10$varname)),
        caption = '\\label{tab:trpB_int_fq} Sign/bound frequency table for $\\Delta trpB$ model')
@@ -1209,6 +1224,37 @@ printTable(repTbl10[order(pval,original)], digits = 5,
            label = 'tab:RepsTrpB10')
 ```
 
+# Sensome Outlook
+Supplementary Table \ref{tab:FlOutline} summarize the properties of model 
+parameters for each of four models considered so far. 
+```{r prepare.flux.stat}
+fl.stat<-dfAll[,.(N=length(NActive64),
+                  Nr=length(which(type=='u')),
+                  NPcard=length(which(card==1)),NRcard=length(unique(MetID[which(card==1)])),
+                  NPrange=length(which(range<=1e-5)),NRrange=length(unique(MetID[which(range<=1e-5)])),
+                  NPactive=length(which(NActive64>0)),
+                  NRactive=length(unique(MetID[which(NActive64>0)])),
+                  NPsig=length(which(pval<=0.1)),NRsig=length(unique(MetID[which(pval<=0.1)]))),
+               by=.(Strain,MicrobeID)]
+```
+
+```{r fluxes.stat,results='asis',cache=FALSE}
+printTable(fl.stat, digits = 5,
+           main = 'Flux statistics overview',
+           landscape = TRUE,align = alFlOutl,
+           label = 'tab:FlOutline')
+```
+
+Columns of the Supplementary Table \ref{tab:FlOutline} contains total number
+of parameters in the model (N), number of parameters (NPcard) variation of which do not
+change the flux of the corresponding reaction (NRcard, calculated as the number of parameters with
+unique flux value), 
+number of parameters (NPrange), variation of which cause only small variation of the flux
+through corresponding reaction (NRrange), number of parameters (NPactive) that have nonempty set of
+active boundary values among tested Sobol points and number of correspondent reactions (NRactive),
+number of parameters with statistically significant sensitivity coefficient (NPsig) and
+number of correspondent reactions (NRsig).
+
 # Sensome Intersections
 Supplementary Figures \ref{fig:upsetSens} and \ref{fig:vennSens} show how fluxes
 that significantly influences biomass production distributed among different model
@@ -1237,13 +1283,13 @@ vn<-gplots::venn(upsetinput)
 
 ```{r uncommon.sensitive.fluxes}
 ints<-attr(vn,'intersections')
-df1<-dfw[match(ints$`wt:hisD:trpB`,df$varname),c("MetID","varname","Name","ExEquation")]
+df1<-dfw[match(ints$`wt:hisD:trpB`,dfw$varname),c("MetID","varname","Name","ExEquation")]
 df1$Group<-'wt:hisD:trpB'
-df2<-dfw[match(ints$`wt:hisD2:trpB`,df$varname),c("MetID","varname","Name","ExEquation")]
+df2<-dfw[match(ints$`wt:hisD2:trpB`,dfw$varname),c("MetID","varname","Name","ExEquation")]
 df2$Group<-'wt:hisD2:trpB'
-df3<-dfw[match(ints$trpB,df$varname),c("MetID","varname","Name","ExEquation")]
+df3<-dfw[match(ints$trpB,dfw$varname),c("MetID","varname","Name","ExEquation")]
 df3$Group<-'trpB'
-df4<-dfw[match(ints$hisD2,df$varname),c("MetID","varname","Name","ExEquation")]
+df4<-dfw[match(ints$hisD2,dfw$varname),c("MetID","varname","Name","ExEquation")]
 df4$Group<-'hisD2'
 intsDF<-rbind(df1,df2,df3,df4)[,c('Group',"MetID","varname","Name","ExEquation")]
 pander(intsDF,
